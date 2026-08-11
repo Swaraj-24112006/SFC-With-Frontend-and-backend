@@ -1,14 +1,16 @@
 import React, { useState } from 'react';
 import { Kaizen } from '../types';
-import { Search, Filter, Download, ArrowUpDown, ChevronDown, ChevronUp, Eye } from 'lucide-react';
+import { Search, Filter, Download, ArrowUpDown, ChevronDown, ChevronUp, Eye, ShieldCheck, Settings, Users } from 'lucide-react';
 import { formatIndianRupees, formatIndianRupeesCompact } from '../utils';
+import KaizenImpactModal from './KaizenImpactModal';
 
 interface KaizenSpreadsheetProps {
   kaizens: Kaizen[];
   onSelectKaizen: (k: Kaizen) => void;
+  onUpdateKaizen?: (id: string, updatedFields: Partial<Kaizen>) => void;
 }
 
-export default function KaizenSpreadsheet({ kaizens, onSelectKaizen }: KaizenSpreadsheetProps) {
+export default function KaizenSpreadsheet({ kaizens, onSelectKaizen, onUpdateKaizen }: KaizenSpreadsheetProps) {
   const [search, setSearch] = useState('');
   const [filterMinifactory, setFilterMinifactory] = useState('All');
   const [filterStatus, setFilterStatus] = useState('All');
@@ -16,6 +18,9 @@ export default function KaizenSpreadsheet({ kaizens, onSelectKaizen }: KaizenSpr
   
   // Mobile expand rows tracker
   const [expandedRowId, setExpandedRowId] = useState<string | null>(null);
+
+  // Impact modal trigger state
+  const [impactModalKaizen, setImpactModalKaizen] = useState<Kaizen | null>(null);
 
   // Filter kaizens
   const filteredKaizens = kaizens.filter(k => {
@@ -170,6 +175,7 @@ export default function KaizenSpreadsheet({ kaizens, onSelectKaizen }: KaizenSpr
                 <th className="px-3 py-2.5 border-r border-slate-300 w-[80px]">Status</th>
                 {/* Yellow Highlighted Decision Header */}
                 <th className="px-3 py-2.5 border-r border-slate-300 bg-[#fef08a] text-amber-900 font-extrabold w-[110px]">Kaizen / Good Point</th>
+                <th className="px-3 py-2.5 border-r border-slate-300 w-[140px]">5M / Safety / PFD Impact</th>
                 <th className="px-3 py-2.5 w-[160px]">Remark</th>
               </tr>
             </thead>
@@ -263,6 +269,30 @@ export default function KaizenSpreadsheet({ kaizens, onSelectKaizen }: KaizenSpr
                       }`}>
                         {k.classification}
                       </span>
+                    </td>
+                    {/* 5M / Safety / PFD Impact Closure Cell */}
+                    <td 
+                      className="px-2 py-2 border-r border-slate-200 text-center"
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      <button
+                        type="button"
+                        onClick={() => setImpactModalKaizen(k)}
+                        className={`w-full px-2 py-1 rounded-lg text-[9px] font-mono font-extrabold uppercase transition border flex items-center justify-center space-x-1 cursor-pointer ${
+                          k.impactAssessment?.overallClosureStatus === 'Fully Closed'
+                            ? 'bg-emerald-100 text-emerald-800 border-emerald-300 hover:bg-emerald-200'
+                            : k.impactAssessment?.overallClosureStatus === 'Actions Allocated'
+                            ? 'bg-indigo-100 text-indigo-800 border-indigo-300 hover:bg-indigo-200'
+                            : 'bg-slate-100 text-slate-700 border-slate-200 hover:bg-slate-200'
+                        }`}
+                      >
+                        <ShieldCheck className="w-3 h-3 text-amber-500" />
+                        <span>
+                          {k.impactAssessment?.overallClosureStatus === 'Fully Closed'
+                            ? '✓ Fully Closed'
+                            : k.impactAssessment?.overallClosureStatus || '⚡ 5M Impacts'}
+                        </span>
+                      </button>
                     </td>
                     <td className="px-3 py-2 text-slate-500 italic max-w-[160px] truncate">
                       {k.remark || '-'}
@@ -377,6 +407,20 @@ export default function KaizenSpreadsheet({ kaizens, onSelectKaizen }: KaizenSpr
         </div>
 
       </div>
+
+      {/* KAIZEN PROCESS & 5M IMPACT CLOSURE MODAL */}
+      {impactModalKaizen && (
+        <KaizenImpactModal
+          kaizen={impactModalKaizen}
+          mode="closure"
+          onClose={() => setImpactModalKaizen(null)}
+          onUpdateKaizen={(id, updatedFields) => {
+            if (onUpdateKaizen) {
+              onUpdateKaizen(id, updatedFields);
+            }
+          }}
+        />
+      )}
 
     </div>
   );

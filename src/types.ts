@@ -1,3 +1,35 @@
+export interface ImpactItem {
+  required: boolean;
+  description?: string;
+  assignedTo: string; // Default is the Kaizen initiator
+  status: 'Pending' | 'Completed' | 'Not Required';
+  completedBy?: string;
+  completedDate?: string;
+  notes?: string;
+}
+
+export interface AllocatedResource {
+  id: string;
+  name: string;
+  role: string; // e.g., Quality Engineer, Safety Officer, Process Lead
+  taskAssigned: string; // e.g. "PFMEA Revision", "PFD Drawing", "Safety Risk Assessment"
+}
+
+export interface KaizenImpactAssessment {
+  decidedInReview: boolean;
+  reviewedDate?: string;
+  reviewedBy?: string;
+  fiveMChange: ImpactItem;
+  safetyImpact: ImpactItem;
+  pfdUpdate: ImpactItem;
+  pfmeaUpdate: ImpactItem;
+  allocatedResources: AllocatedResource[];
+  overallClosureStatus: 'Pending Review' | 'Actions Allocated' | 'In-Progress' | 'Fully Closed';
+  closedBy?: string;
+  closureDate?: string;
+  closureRemarks?: string;
+}
+
 export interface Kaizen {
   id: string;
   srNo: string;
@@ -32,6 +64,7 @@ export interface Kaizen {
   photoBefore: string; // Base64 or image URL
   photoAfter: string;  // Base64 or image URL
   result: string;
+  impactAssessment?: KaizenImpactAssessment;
   createdAt: string;
 }
 

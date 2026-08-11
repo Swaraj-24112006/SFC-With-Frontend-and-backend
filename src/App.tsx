@@ -419,7 +419,7 @@ export default function App() {
                       <h2 className="text-sm font-black text-slate-800 uppercase tracking-wide font-mono mb-1">📋 Kaizen Spreadsheet Register</h2>
                       <p className="text-xs text-slate-400 font-medium">Click on any entry row to inspect, print, or review its complete Kaizen sheet.</p>
                     </div>
-                    <KaizenSpreadsheet kaizens={kaizens} onSelectKaizen={setInspectKaizen} />
+                    <KaizenSpreadsheet kaizens={kaizens} onSelectKaizen={setInspectKaizen} onUpdateKaizen={handleUpdateKaizen} />
                   </div>
                 )}
 

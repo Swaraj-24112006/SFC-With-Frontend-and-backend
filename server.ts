@@ -75,6 +75,55 @@ let kaizens: Kaizen[] = [
     photoBefore: svgBeforeAirLeak,
     photoAfter: svgAfterAirLeak,
     result: "Compressor cycle rate reduced by 35%. Decibel levels dropped to a safe 64 dB. Clean workspace restored.",
+    impactAssessment: {
+      decidedInReview: true,
+      reviewedDate: "2026-06-20",
+      reviewedBy: "Amit Mehta (Kaizen Lead)",
+      fiveMChange: {
+        required: true,
+        description: "Method & Machine change for pneumatic fitting standard",
+        assignedTo: "Rahul Sharma (ITI Operator)",
+        status: "Completed",
+        completedBy: "Rahul Sharma",
+        completedDate: "2026-06-22",
+        notes: "Updated SOP for pneumatic coupler replacement and O-ring inspection."
+      },
+      safetyImpact: {
+        required: true,
+        description: "Noise level reduction and pressure rating check",
+        assignedTo: "Sanjay Patil (Safety Specialist)",
+        status: "Completed",
+        completedBy: "Sanjay Patil",
+        completedDate: "2026-06-21",
+        notes: "Decibel check logged at 64dB. Zero pressure leak risk."
+      },
+      pfdUpdate: {
+        required: true,
+        description: "Process Flow Diagram step 4 inspection update",
+        assignedTo: "Arjun Mehra (Process Lead)",
+        status: "Completed",
+        completedBy: "Arjun Mehra",
+        completedDate: "2026-06-23",
+        notes: "PFD Rev 3.2 published with brass coupler inspection checkpoint."
+      },
+      pfmeaUpdate: {
+        required: true,
+        description: "PFMEA air leak failure mode RPN reduction",
+        assignedTo: "Sunita Rao (Quality Lead)",
+        status: "Completed",
+        completedBy: "Sunita Rao",
+        completedDate: "2026-06-24",
+        notes: "RPN reduced from 120 to 24 in PFMEA Document #PFMEA-VP-09."
+      },
+      allocatedResources: [
+        { id: "res-1", name: "Sunita Rao", role: "Quality Lead", taskAssigned: "PFMEA RPN Calculation & Document Revision" },
+        { id: "res-2", name: "Sanjay Patil", role: "Safety Specialist", taskAssigned: "Noise & Pneumatic Safety Audit" }
+      ],
+      overallClosureStatus: "Fully Closed",
+      closedBy: "Rahul Sharma (ITI Operator)",
+      closureDate: "2026-06-24",
+      closureRemarks: "All 5M, Safety, PFD and PFMEA impacts fully audited and updated in plant QMS."
+    },
     createdAt: "2026-06-15T08:30:00.000Z"
   },
   {

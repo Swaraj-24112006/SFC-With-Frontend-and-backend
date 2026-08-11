@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { Kaizen } from '../types';
-import { CheckCircle2, AlertCircle, Award, Lightbulb, Save, ShieldAlert, XCircle, FileText, ChevronDown, ChevronRight, ZoomIn, X, Maximize2, PanelLeftClose, PanelLeftOpen, Columns, Compass } from 'lucide-react';
+import { CheckCircle2, AlertCircle, Award, Lightbulb, Save, ShieldAlert, XCircle, FileText, ChevronDown, ChevronRight, ZoomIn, X, Maximize2, PanelLeftClose, PanelLeftOpen, Columns, Compass, ShieldCheck, Users, Settings, Flame } from 'lucide-react';
 import KaizenPresentationMode from './KaizenPresentationMode';
+import KaizenImpactModal from './KaizenImpactModal';
 
 interface KaizenReviewBoardProps {
   kaizens: Kaizen[];
@@ -26,6 +27,10 @@ export default function KaizenReviewBoard({ kaizens, onUpdateKaizen }: KaizenRev
     url: string;
     title: string;
   } | null>(null);
+
+  // Impact modal state
+  const [impactModalKaizen, setImpactModalKaizen] = useState<Kaizen | null>(null);
+  const [impactModalMode, setImpactModalMode] = useState<'review' | 'closure'>('review');
 
   // Current editing state for review fields
   const [classification, setClassification] = useState<'Kaizen' | 'Good Point' | 'Pending' | 'None'>('Pending');
@@ -657,6 +662,67 @@ export default function KaizenReviewBoard({ kaizens, onUpdateKaizen }: KaizenRev
                 </div>
               </div>
 
+              {/* 5. PROCESS & 5M IMPACT ASSESSMENT & RESOURCE ALLOCATION */}
+              <div className="bg-slate-900 text-white rounded-2xl p-4 space-y-3 border border-slate-800">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                  <div className="space-y-1">
+                    <div className="inline-flex items-center space-x-1.5 text-amber-400 font-mono text-[10px] font-bold uppercase tracking-wider">
+                      <Settings className="w-3.5 h-3.5" />
+                      <span>5. Process & 5M Impact Assessment</span>
+                    </div>
+                    <h4 className="text-xs font-bold text-slate-100">
+                      Evaluate 5M Changes, Safety, PFD & PFMEA Impacts & Allocate Helpers
+                    </h4>
+                    <p className="text-[11px] text-slate-400 font-sans">
+                      Decide required updates for 5M, Safety Risk, PFD, and PFMEA. Default assigned to initiator (<strong>{selectedKaizen.ideaBy}</strong>) or allocate helper resources.
+                    </p>
+                  </div>
+
+                  <div className="flex items-center space-x-2 shrink-0">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setImpactModalKaizen(selectedKaizen);
+                        setImpactModalMode('review');
+                      }}
+                      className="px-4 py-2.5 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 font-black font-mono text-xs rounded-xl shadow-md transition flex items-center space-x-2 border border-amber-300 cursor-pointer"
+                    >
+                      <ShieldCheck className="w-4 h-4" />
+                      <span>EVALUATE & ALLOCATE IMPACTS</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setImpactModalKaizen(selectedKaizen);
+                        setImpactModalMode('closure');
+                      }}
+                      className="px-3.5 py-2.5 bg-slate-800 hover:bg-slate-700 text-emerald-400 font-bold font-mono text-xs rounded-xl transition flex items-center space-x-1.5 border border-slate-700 cursor-pointer"
+                    >
+                      <Users className="w-4 h-4" />
+                      <span>View Sign-Offs</span>
+                    </button>
+                  </div>
+                </div>
+
+                {/* Summary status pill */}
+                {selectedKaizen.impactAssessment && (
+                  <div className="bg-slate-950/80 rounded-xl p-2.5 border border-slate-800 flex flex-wrap items-center justify-between gap-2 text-[10px] font-mono">
+                    <div className="flex items-center space-x-2">
+                      <span className="text-slate-400">Closure Status:</span>
+                      <span className="text-emerald-400 font-bold uppercase">
+                        {selectedKaizen.impactAssessment.overallClosureStatus || 'Actions Allocated'}
+                      </span>
+                    </div>
+                    <div className="flex items-center space-x-3 text-slate-300">
+                      <span>5M: <strong className={selectedKaizen.impactAssessment.fiveMChange?.required ? 'text-amber-400' : 'text-slate-500'}>{selectedKaizen.impactAssessment.fiveMChange?.required ? (selectedKaizen.impactAssessment.fiveMChange?.status || 'Required') : 'Off'}</strong></span>
+                      <span>Safety: <strong className={selectedKaizen.impactAssessment.safetyImpact?.required ? 'text-emerald-400' : 'text-slate-500'}>{selectedKaizen.impactAssessment.safetyImpact?.required ? (selectedKaizen.impactAssessment.safetyImpact?.status || 'Required') : 'Off'}</strong></span>
+                      <span>PFD: <strong className={selectedKaizen.impactAssessment.pfdUpdate?.required ? 'text-indigo-400' : 'text-slate-500'}>{selectedKaizen.impactAssessment.pfdUpdate?.required ? (selectedKaizen.impactAssessment.pfdUpdate?.status || 'Required') : 'Off'}</strong></span>
+                      <span>PFMEA: <strong className={selectedKaizen.impactAssessment.pfmeaUpdate?.required ? 'text-violet-400' : 'text-slate-500'}>{selectedKaizen.impactAssessment.pfmeaUpdate?.required ? (selectedKaizen.impactAssessment.pfmeaUpdate?.status || 'Required') : 'Off'}</strong></span>
+                    </div>
+                  </div>
+                )}
+              </div>
+
               {/* Log Decision Button */}
               <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between pt-2 gap-3">
                 {successMessage ? (
@@ -796,6 +862,16 @@ export default function KaizenReviewBoard({ kaizens, onUpdateKaizen }: KaizenRev
               setPresentingKaizen(found);
             }
           }}
+        />
+      )}
+
+      {/* KAIZEN PROCESS & 5M IMPACT CLOSURE & RESOURCE ALLOCATION MODAL */}
+      {impactModalKaizen && (
+        <KaizenImpactModal
+          kaizen={impactModalKaizen}
+          mode={impactModalMode}
+          onClose={() => setImpactModalKaizen(null)}
+          onUpdateKaizen={onUpdateKaizen}
         />
       )}
 
