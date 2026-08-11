@@ -7,7 +7,10 @@ import {
   ShieldAlert, 
   Compass, 
   Building,
-  ArrowRight
+  ArrowRight,
+  Trophy,
+  Award,
+  Vote
 } from 'lucide-react';
 import { formatIndianRupeesCompact } from '../utils';
 
@@ -17,7 +20,7 @@ interface GlobalDashboardProps {
   fiveSAudits: FiveSAudit[];
   safetyIncidents: SafetyIncident[];
   ppsrReports: PpsrReport[];
-  onNavigateToModule: (module: 'kaizen' | 'redflag' | 'fives' | 'safety' | 'ppsr', subAction?: string) => void;
+  onNavigateToModule: (module: 'kaizen' | 'redflag' | 'fives' | 'safety' | 'ppsr' | 'cft-awards', subAction?: string) => void;
 }
 
 export default function GlobalDashboard({
@@ -297,6 +300,32 @@ export default function GlobalDashboard({
           </div>
         </button>
 
+      </div>
+
+      {/* CFT Monthly Best Awards Banner Card */}
+      <div className="bg-gradient-to-r from-slate-900 via-slate-950 to-indigo-950 text-white rounded-3xl p-6 shadow-xl border border-amber-500/30 flex flex-col md:flex-row md:items-center justify-between gap-6">
+        <div className="space-y-2 max-w-2xl">
+          <div className="inline-flex items-center space-x-2 bg-amber-500/20 text-amber-300 border border-amber-500/30 text-xs font-bold px-3 py-1 rounded-full uppercase tracking-wider font-mono">
+            <Trophy className="w-3.5 h-3.5 text-amber-400" />
+            <span>Monthly CFT Excellence Awards</span>
+          </div>
+          <h3 className="text-xl md:text-2xl font-black font-display tracking-tight text-white uppercase">
+            🏆 Monthly Meeting & Voting Terminal
+          </h3>
+          <p className="text-xs md:text-sm text-slate-300 font-sans">
+            Cross-Functional Team (CFT) monthly meeting where all approved Kaizens and closed PPSR problem-solving reports are evaluated. CFT committee members cast votes to decide the <strong>Top 3 Best Kaizens</strong> and <strong>Top 3 Best PPSRs</strong> for monthly trophies and cash prizes.
+          </p>
+        </div>
+
+        <button
+          type="button"
+          onClick={() => onNavigateToModule('cft-awards')}
+          className="px-6 py-3.5 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 font-black font-mono text-xs rounded-2xl shadow-lg transition active:scale-95 flex items-center justify-center space-x-2 border border-amber-300 shrink-0 cursor-pointer"
+        >
+          <Vote className="w-4 h-4" />
+          <span>OPEN CFT VOTING TERMINAL</span>
+          <ArrowRight className="w-4 h-4" />
+        </button>
       </div>
 
     </div>

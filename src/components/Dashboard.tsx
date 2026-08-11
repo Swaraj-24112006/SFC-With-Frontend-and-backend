@@ -6,7 +6,7 @@ import { formatIndianRupees, formatIndianRupeesCompact } from '../utils';
 interface DashboardProps {
   kaizens: Kaizen[];
   onSelectKaizen: (k: Kaizen) => void;
-  onNavigateToTab: (tab: 'form' | 'committee' | 'list') => void;
+  onNavigateToTab: (tab: 'form' | 'committee' | 'list' | 'cft-awards') => void;
 }
 
 export default function Dashboard({ kaizens, onSelectKaizen, onNavigateToTab }: DashboardProps) {
@@ -77,6 +77,12 @@ export default function Dashboard({ kaizens, onSelectKaizen, onNavigateToTab }: 
               className="px-5 py-3 bg-slate-800 hover:bg-slate-700 text-white border border-slate-700 rounded-xl text-xs font-bold transition-all flex items-center space-x-1.5 cursor-pointer"
             >
               <span>👥 Review Meeting</span>
+            </button>
+            <button
+              onClick={() => onNavigateToTab('cft-awards')}
+              className="px-5 py-3 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 font-black rounded-xl text-xs transition-all shadow-md flex items-center space-x-1.5 cursor-pointer border border-amber-300"
+            >
+              <span>🏆 Monthly Best Awards</span>
             </button>
           </div>
         </div>

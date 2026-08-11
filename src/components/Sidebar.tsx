@@ -18,7 +18,10 @@ import {
   TrendingUp,
   UserCheck,
   AlertOctagon,
-  Gauge
+  Gauge,
+  Trophy,
+  Award,
+  Vote
 } from 'lucide-react';
 import { UserPersona } from '../types';
 
@@ -275,6 +278,17 @@ export default function Sidebar({
                   <UserCheck className="w-3 h-3 shrink-0" />
                   <span>👥 Committee Review</span>
                 </button>
+                <button
+                  onClick={() => selectSubTab('cft-awards', '')}
+                  className={`w-full flex items-center space-x-2 px-2.5 py-1.5 rounded-lg text-left text-[11px] font-semibold transition ${
+                    activeModule === 'cft-awards'
+                      ? 'text-amber-400 font-bold bg-slate-900/60'
+                      : 'text-amber-400/80 hover:text-amber-300 hover:bg-slate-900/30'
+                  }`}
+                >
+                  <Trophy className="w-3 h-3 shrink-0 text-amber-400" />
+                  <span>🏆 Monthly Best Awards</span>
+                </button>
               </div>
             )}
           </div>
@@ -472,8 +486,37 @@ export default function Sidebar({
                   <PlusCircle className="w-3 h-3 shrink-0" />
                   <span>Initiate New PPSR</span>
                 </button>
+                <button
+                  onClick={() => selectSubTab('cft-awards', '')}
+                  className="w-full flex items-center space-x-2 px-2.5 py-1.5 rounded-lg text-left text-[11px] font-semibold text-amber-400/80 hover:text-amber-300 hover:bg-slate-900/30"
+                >
+                  <Trophy className="w-3 h-3 shrink-0 text-amber-400" />
+                  <span>🏆 CFT Best Awards</span>
+                </button>
               </div>
             )}
+          </div>
+
+          {/* CFT Monthly Best Awards Top-Level Module */}
+          <div className="pt-2">
+            <button
+              onClick={() => selectModule('cft-awards')}
+              className={`w-full flex items-center justify-between px-3 py-2.5 rounded-xl transition-all duration-150 text-xs font-bold tracking-wide uppercase ${
+                activeModule === 'cft-awards'
+                  ? 'bg-amber-500/20 text-amber-300 border border-amber-500/30 shadow-sm'
+                  : 'hover:bg-slate-900 text-amber-400/90 hover:text-amber-300 border border-amber-500/10 bg-amber-500/5'
+              }`}
+            >
+              <div className="flex items-center space-x-3">
+                <Trophy className="w-4 h-4 shrink-0 text-amber-400" />
+                {isExpanded && <span className="truncate">🏆 CFT Best Awards</span>}
+              </div>
+              {isExpanded && (
+                <span className="text-[9px] bg-amber-500/20 text-amber-300 px-1.5 py-0.5 rounded font-mono font-bold">
+                  VOTE
+                </span>
+              )}
+            </button>
           </div>
 
         </div>

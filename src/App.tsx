@@ -11,6 +11,7 @@ import FiveSAudits from './components/FiveSAudits';
 import SafetyIncidents from './components/SafetyIncidents';
 import PpsrSystem from './components/PpsrSystem';
 import PpsrSheetInspect from './components/PpsrSheetInspect';
+import CftMonthlyAwards from './components/CftMonthlyAwards';
 import { Kaizen, UserPersona, RedFlag, FiveSAudit, SafetyIncident, PpsrReport, PpsrMeetingLog } from './types';
 import { Eye, X, Award, Lightbulb, Check, FileText, CheckCircle, HelpCircle, Printer, LayoutDashboard, Flag, Sparkles, ShieldAlert, Compass, Menu } from 'lucide-react';
 import { formatIndianRupees } from './utils';
@@ -19,10 +20,10 @@ export default function App() {
   const [persona, setPersona] = useState<UserPersona>('manager');
   
   // Top Level Navigation Module Switcher
-  const [activeModule, setActiveModule] = useState<'global-dashboard' | 'kaizen' | 'redflag' | 'fives' | 'safety' | 'ppsr'>('global-dashboard');
+  const [activeModule, setActiveModule] = useState<'global-dashboard' | 'kaizen' | 'redflag' | 'fives' | 'safety' | 'ppsr' | 'cft-awards'>('global-dashboard');
   
   // Kaizen internal tab state
-  const [activeTab, setActiveTab] = useState<'dashboard' | 'form' | 'committee' | 'list'>('dashboard');
+  const [activeTab, setActiveTab] = useState<'dashboard' | 'form' | 'committee' | 'list' | 'cft-awards'>('dashboard');
 
   // Mobile drawer state
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
@@ -431,6 +432,15 @@ export default function App() {
                 {activeTab === 'committee' && (
                   <KaizenReviewBoard kaizens={kaizens} onUpdateKaizen={handleUpdateKaizen} />
                 )}
+
+                {activeTab === 'cft-awards' && (
+                  <CftMonthlyAwards
+                    kaizens={kaizens}
+                    ppsrReports={ppsrReports}
+                    onUpdateKaizen={handleUpdateKaizen}
+                    onUpdatePpsrReport={handleUpdatePpsrReport}
+                  />
+                )}
               </div>
             )}
 
@@ -471,13 +481,25 @@ export default function App() {
             {activeModule === 'ppsr' && (
               <PpsrSystem
                 reports={ppsrReports}
+                kaizens={kaizens}
                 onAddReport={handleAddPpsrReport}
                 onUpdateReport={handleUpdatePpsrReport}
+                onUpdateKaizen={handleUpdateKaizen}
                 initialAction={initialPpsrAction}
                 onClearInitialAction={() => setInitialPpsrAction(null)}
                 onInspectReport={(report) => setInspectPpsr(report)}
                 meetings={ppsrMeetings}
                 onAddMeeting={handleAddPpsrMeeting}
+              />
+            )}
+
+            {/* 7. CFT Monthly Awards & Voting */}
+            {activeModule === 'cft-awards' && (
+              <CftMonthlyAwards
+                kaizens={kaizens}
+                ppsrReports={ppsrReports}
+                onUpdateKaizen={handleUpdateKaizen}
+                onUpdatePpsrReport={handleUpdatePpsrReport}
               />
             )}
 

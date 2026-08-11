@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import { PpsrReport } from '../types';
+import { PpsrReport, Kaizen } from '../types';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import IshikawaFishbone from './IshikawaFishbone';
 import PpsrPresentationMode from './PpsrPresentationMode';
+import CftMonthlyAwards from './CftMonthlyAwards';
 import { 
   Compass, 
   Plus, 
@@ -42,8 +43,10 @@ import { PpsrMeetingLog } from '../types';
 
 interface PpsrSystemProps {
   reports: PpsrReport[];
+  kaizens?: Kaizen[];
   onAddReport: (data: Partial<PpsrReport>) => void;
   onUpdateReport: (id: string, data: Partial<PpsrReport>) => void;
+  onUpdateKaizen?: (id: string, data: Partial<Kaizen>) => void;
   initialAction?: string | null;
   onClearInitialAction?: () => void;
   onInspectReport?: (report: PpsrReport) => void;
@@ -51,12 +54,14 @@ interface PpsrSystemProps {
   onAddMeeting?: (data: Partial<PpsrMeetingLog>) => void;
 }
 
-type PpsrSubTab = 'board' | 'register' | 'meeting' | 'initiate';
+type PpsrSubTab = 'board' | 'register' | 'meeting' | 'initiate' | 'cft-awards';
 
 export default function PpsrSystem({
   reports,
+  kaizens = [],
   onAddReport,
   onUpdateReport,
+  onUpdateKaizen,
   initialAction,
   onClearInitialAction,
   onInspectReport,
@@ -563,9 +568,28 @@ export default function PpsrSystem({
         >
           🧠 Log BE Form
         </button>
+        <button
+          onClick={() => setActiveTab('cft-awards')}
+          className={`flex-1 py-2.5 px-3 text-center rounded-xl text-[11px] font-black uppercase tracking-wider transition ${
+            activeTab === 'cft-awards'
+              ? 'bg-amber-500 text-slate-950 shadow-sm'
+              : 'text-amber-600 hover:text-amber-800 hover:bg-amber-50'
+          }`}
+        >
+          🏆 CFT Best Awards
+        </button>
       </div>
 
       {/* 3. Render Active Tab */}
+
+      {activeTab === 'cft-awards' && (
+        <CftMonthlyAwards
+          kaizens={kaizens}
+          ppsrReports={reports}
+          onUpdateKaizen={onUpdateKaizen}
+          onUpdatePpsrReport={onUpdateReport}
+        />
+      )}
 
       {/* SUB-TAB 1: SOLVER BOARD */}
       {activeTab === 'board' && (
