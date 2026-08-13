@@ -1,8 +1,9 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { PpsrReport } from '../types';
-import { X, Printer, Compass, CheckCircle2, AlertCircle, Sparkles, HelpCircle } from 'lucide-react';
+import { X, Printer, Compass, CheckCircle2, AlertCircle, Sparkles, HelpCircle, Download, Loader2 } from 'lucide-react';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import IshikawaFishbone from './IshikawaFishbone';
+import { downloadElementAsPdf, triggerA3Print } from '../utils/pdfExporter';
 
 interface PpsrSheetInspectProps {
   report: PpsrReport;
@@ -52,6 +53,18 @@ export default function PpsrSheetInspect({ report, onClose }: PpsrSheetInspectPr
     { name: 'Current', value: 0.2 }
   ];
 
+  const [isPdfExporting, setIsPdfExporting] = useState(false);
+
+  const handleDownloadPdf = async () => {
+    setIsPdfExporting(true);
+    await downloadElementAsPdf('ppsr-sheet-content', {
+      filename: `PPSR_Report_${report.ppsrNo}.pdf`,
+      orientation: 'landscape',
+      format: 'a3'
+    });
+    setIsPdfExporting(false);
+  };
+
   return (
     <div className="fixed inset-0 bg-slate-900/70 backdrop-blur-xs flex items-center justify-center z-50 p-4 overflow-y-auto print:absolute print:inset-0 print:bg-white print:p-0 print:m-0 print:overflow-visible" id="ppsr-inspect-modal">
       <div className="bg-slate-100 rounded-3xl w-full max-w-5xl shadow-2xl border border-slate-200 overflow-hidden flex flex-col my-4 max-h-[95vh] print:border-none print:shadow-none print:rounded-none print:max-h-none print:max-w-none print:w-full print:m-0 print:p-0 print:overflow-visible">
@@ -68,13 +81,36 @@ export default function PpsrSheetInspect({ report, onClose }: PpsrSheetInspectPr
             </div>
           </div>
           <div className="flex items-center space-x-3">
+            {/* Download PDF button */}
             <button
-              onClick={() => window.print()}
+              type="button"
+              disabled={isPdfExporting}
+              onClick={handleDownloadPdf}
+              className="flex items-center space-x-2 px-4 py-2 bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white rounded-xl text-xs font-black uppercase tracking-wider font-mono shadow-md cursor-pointer transition-all hover:scale-105"
+            >
+              {isPdfExporting ? (
+                <>
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  <span>Generating PDF...</span>
+                </>
+              ) : (
+                <>
+                  <Download className="w-4 h-4" />
+                  <span>Download PDF</span>
+                </>
+              )}
+            </button>
+
+            {/* Print A3 Sheet button */}
+            <button
+              type="button"
+              onClick={() => triggerA3Print('ppsr-sheet-content', `PPSR Report - ${report.ppsrNo}`)}
               className="flex items-center space-x-2 px-4 py-2 bg-violet-600 hover:bg-violet-700 text-white rounded-xl text-xs font-black uppercase tracking-wider font-mono shadow-md cursor-pointer transition-all hover:scale-105"
             >
               <Printer className="w-4 h-4" />
-              <span>Print / Save as PDF</span>
+              <span>Print A3 Sheet</span>
             </button>
+
             <button
               onClick={onClose}
               className="p-2 bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white rounded-xl transition"
@@ -87,8 +123,11 @@ export default function PpsrSheetInspect({ report, onClose }: PpsrSheetInspectPr
         {/* Outer Scrollable Container */}
         <div className="flex-1 overflow-y-auto p-4 md:p-8 bg-slate-100 print:p-0 print:bg-white print:overflow-visible">
           
-          {/* Printable Paper A4-like Sheet */}
-          <div className="max-w-4xl mx-auto bg-white border border-slate-300 rounded-2xl shadow-sm p-6 md:p-8 space-y-8 text-slate-800 font-sans print:border print:border-slate-400 print:rounded-none print:shadow-none print:p-0 print:m-0 print:space-y-6">
+          {/* Printable Paper Sheet */}
+          <div
+            id="ppsr-sheet-content"
+            className="max-w-4xl mx-auto bg-white border border-slate-300 rounded-2xl shadow-sm p-6 md:p-8 space-y-8 text-slate-800 font-sans print:border print:border-slate-400 print:rounded-none print:shadow-none print:p-0 print:m-0 print:space-y-6"
+          >
             
             {/* Header Title Grid */}
             <div className="border border-slate-800 grid grid-cols-1 md:grid-cols-4 font-mono">

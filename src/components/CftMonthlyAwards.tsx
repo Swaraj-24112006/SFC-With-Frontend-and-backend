@@ -3,1000 +3,979 @@ import { Kaizen, PpsrReport } from '../types';
 import { 
   Trophy, 
   Award, 
-  Medal, 
-  Vote, 
   CheckCircle2, 
   Users, 
   Calendar, 
-  Sparkles, 
-  TrendingUp, 
   Printer, 
   X, 
   Plus, 
   UserCheck, 
-  FileText, 
-  ChevronRight,
-  ShieldCheck,
-  Building,
-  DollarSign,
-  Lightbulb,
-  Compass,
+  Search,
+  Filter,
+  Eye,
+  Star,
+  ChevronDown,
+  ChevronUp,
+  Sparkles,
+  Medal,
   Check,
-  Star
+  Building,
+  ArrowUpRight
 } from 'lucide-react';
 import { formatIndianRupees } from '../utils';
 
 interface CftMonthlyAwardsProps {
   kaizens: Kaizen[];
-  ppsrReports: PpsrReport[];
+  ppsrReports?: PpsrReport[];
   onUpdateKaizen?: (id: string, updatedFields: Partial<Kaizen>) => void;
   onUpdatePpsrReport?: (id: string, updatedFields: Partial<PpsrReport>) => void;
 }
 
-interface VoteRecord {
-  voterName: string;
-  voterRole: string;
-  kaizenVotes: { kaizenId: string; rank: 1 | 2 | 3 }[];
-  ppsrVotes: { ppsrId: string; rank: 1 | 2 | 3 }[];
+export interface CftMember {
+  id: string;
+  name: string;
+  role: string;
+  department?: string;
 }
+
+// Category definition for Department & Minifactory Winners
+export type CategoryKey = 'MF1' | 'MF2' | 'MF3' | 'Machining' | 'Quality' | 'Maintenance';
+
+export const CATEGORY_CONFIGS: {
+  key: CategoryKey;
+  title: string;
+  subtitle: string;
+  winnerCount: number;
+  badgeBg: string;
+}[] = [
+  {
+    key: 'MF1',
+    title: 'Minifactory 1 (MF1)',
+    subtitle: 'Vacuum Pump & Sub-Assemblies',
+    winnerCount: 1,
+    badgeBg: 'from-amber-500 to-yellow-600 border-amber-400 text-slate-950'
+  },
+  {
+    key: 'MF2',
+    title: 'Minifactory 2 (MF2)',
+    subtitle: 'EGR Valve & Power Cell Lines (2 Winners)',
+    winnerCount: 2,
+    badgeBg: 'from-blue-600 to-indigo-700 border-blue-400 text-white'
+  },
+  {
+    key: 'MF3',
+    title: 'Minifactory 3 (MF3)',
+    subtitle: 'Bypass Valve & Smart Sensors',
+    winnerCount: 1,
+    badgeBg: 'from-emerald-600 to-teal-700 border-emerald-400 text-white'
+  },
+  {
+    key: 'Machining',
+    title: 'Machining Department',
+    subtitle: 'CNC, Milling, Turning & Tooling Shop',
+    winnerCount: 1,
+    badgeBg: 'from-orange-500 to-amber-600 border-amber-400 text-slate-950'
+  },
+  {
+    key: 'Quality',
+    title: 'Quality Department',
+    subtitle: 'QA/QC, Metrology & Inspection Benches',
+    winnerCount: 1,
+    badgeBg: 'from-violet-600 to-purple-700 border-purple-400 text-white'
+  },
+  {
+    key: 'Maintenance',
+    title: 'Maintenance Department',
+    subtitle: 'Plant Electrical, Utilities & Automation',
+    winnerCount: 1,
+    badgeBg: 'from-rose-600 to-pink-700 border-rose-400 text-white'
+  }
+];
 
 export default function CftMonthlyAwards({
   kaizens,
-  ppsrReports,
-  onUpdateKaizen,
-  onUpdatePpsrReport
+  onUpdateKaizen
 }: CftMonthlyAwardsProps) {
-  // Selected Month
-  const [selectedMonth, setSelectedMonth] = useState('July 2026');
-  const [activeCategory, setActiveCategory] = useState<'kaizen' | 'ppsr'>('kaizen');
+  // Month & Year Selection
+  const [selectedMonth, setSelectedMonth] = useState('July');
+  const [selectedYear, setSelectedYear] = useState('2026');
 
-  // Meeting Details
-  const [meetingDate, setMeetingDate] = useState('2026-07-28');
-  const [chairperson, setChairperson] = useState('Amit Mehta (Kaizen & Quality Lead)');
-  const [attendees, setAttendees] = useState('Sunita Rao, Rajesh Patil, Arjun Mehra, Vijay Deshmukh, Sanjay Patil, Rahul Sharma');
-  const [meetingNotes, setMeetingNotes] = useState('Monthly Cross-Functional Team (CFT) review meeting held to evaluate all approved Kaizens and closed PPSR reports for July 2026. CFT members discussed cost impact, safety gains, and process standardization before casting votes.');
+  // Attendance Toggle (Expand/Collapse panel)
+  const [isAttendanceExpanded, setIsAttendanceExpanded] = useState(true);
 
-  // Default CFT Member list
-  const [cftMembers, setCftMembers] = useState([
-    { name: 'Amit Mehta', role: 'Kaizen & Quality Lead' },
-    { name: 'Rajesh Patil', role: 'Plant Supervisor' },
-    { name: 'Sunita Rao', role: 'Quality Lead' },
-    { name: 'Arjun Mehra', role: 'Automation Lead' },
-    { name: 'Vijay Deshmukh', role: 'Area Leader' },
-    { name: 'Sanjay Patil', role: 'Safety Specialist' },
-    { name: 'Rahul Sharma', role: 'Operator Representative' }
-  ]);
-
-  // Current active voter selected in meeting
-  const [activeVoterIndex, setActiveVoterIndex] = useState(0);
-
-  // In-memory Votes
-  const [votes, setVotes] = useState<VoteRecord[]>([
-    {
-      voterName: 'Amit Mehta',
-      voterRole: 'Kaizen & Quality Lead',
-      kaizenVotes: [
-        { kaizenId: 'kz-1', rank: 1 }, // 3 pts
-        { kaizenId: 'kz-4', rank: 2 }, // 2 pts
-        { kaizenId: 'kz-2', rank: 3 }  // 1 pt
-      ],
-      ppsrVotes: [
-        { ppsrId: 'ppsr-1', rank: 1 },
-        { ppsrId: 'ppsr-2', rank: 2 },
-        { ppsrId: 'ppsr-3', rank: 3 }
-      ]
-    },
-    {
-      voterName: 'Rajesh Patil',
-      voterRole: 'Plant Supervisor',
-      kaizenVotes: [
-        { kaizenId: 'kz-4', rank: 1 },
-        { kaizenId: 'kz-1', rank: 2 },
-        { kaizenId: 'kz-3', rank: 3 }
-      ],
-      ppsrVotes: [
-        { ppsrId: 'ppsr-1', rank: 1 },
-        { ppsrId: 'ppsr-3', rank: 2 },
-        { ppsrId: 'ppsr-2', rank: 3 }
-      ]
-    },
-    {
-      voterName: 'Sunita Rao',
-      voterRole: 'Quality Lead',
-      kaizenVotes: [
-        { kaizenId: 'kz-2', rank: 1 },
-        { kaizenId: 'kz-1', rank: 2 },
-        { kaizenId: 'kz-4', rank: 3 }
-      ],
-      ppsrVotes: [
-        { ppsrId: 'ppsr-1', rank: 1 },
-        { ppsrId: 'ppsr-2', rank: 2 },
-        { ppsrId: 'ppsr-3', rank: 3 }
-      ]
-    }
-  ]);
-
-  // Finalized status
-  const [isFinalized, setIsFinalized] = useState(false);
-  const [showCertificateModal, setShowCertificateModal] = useState<{
-    type: 'Kaizen' | 'PPSR';
-    rank: 1 | 2 | 3;
-    title: string;
-    winnerName: string;
-    area: string;
-    costSaveText: string;
-    srNo: string;
-  } | null>(null);
-
-  // New CFT member modal
-  const [showAddMemberModal, setShowAddMemberModal] = useState(false);
+  // Inline Member Addition Form Visibility & Inputs
+  const [showInlineAddForm, setShowInlineAddForm] = useState(false);
   const [newMemberName, setNewMemberName] = useState('');
   const [newMemberRole, setNewMemberRole] = useState('');
+  const [newMemberDept, setNewMemberDept] = useState('Operations');
 
-  // Toast message
+  // Master List of CFT Members
+  const [cftMembers, setCftMembers] = useState<CftMember[]>([
+    { id: 'cft-1', name: 'Amit Mehta', role: 'Kaizen & Quality Lead', department: 'Quality' },
+    { id: 'cft-2', name: 'Sunita Rao', role: 'Quality Specialist', department: 'Quality' },
+    { id: 'cft-3', name: 'Rajesh Patil', role: 'Plant Supervisor', department: 'Operations' },
+    { id: 'cft-4', name: 'Arjun Mehra', role: 'Automation Lead', department: 'Engineering' },
+    { id: 'cft-5', name: 'Vijay Deshmukh', role: 'Area Leader', department: 'Maintenance' },
+    { id: 'cft-6', name: 'Sanjay Patil', role: 'Process Specialist', department: 'Machining' },
+    { id: 'cft-7', name: 'Rahul Sharma', role: 'Maintenance Lead', department: 'Maintenance' }
+  ]);
+
+  // Present Members Set
+  const [presentMemberIds, setPresentMemberIds] = useState<string[]>([
+    'cft-1', 'cft-2', 'cft-3', 'cft-4', 'cft-5', 'cft-6', 'cft-7'
+  ]);
+
+  // Rating store: Map of memberId -> kaizenId -> rating (1..5)
+  const [ratings, setRatings] = useState<Record<string, Record<string, number>>>({
+    'cft-1': { 'kz-1': 5, 'kz-4': 5, 'kz-5': 4, 'kz-6': 4, 'kz-7': 5, 'kz-8': 5, 'kz-9': 4, 'kz-10': 4 },
+    'cft-2': { 'kz-1': 4, 'kz-4': 5, 'kz-5': 5, 'kz-6': 4, 'kz-7': 5, 'kz-8': 5, 'kz-9': 5, 'kz-10': 4 },
+    'cft-3': { 'kz-1': 5, 'kz-4': 4, 'kz-5': 4, 'kz-6': 5, 'kz-7': 4, 'kz-8': 4, 'kz-9': 4, 'kz-10': 5 },
+    'cft-4': { 'kz-1': 4, 'kz-4': 5, 'kz-5': 4, 'kz-6': 4, 'kz-7': 5, 'kz-8': 4, 'kz-9': 5, 'kz-10': 4 },
+    'cft-5': { 'kz-1': 5, 'kz-4': 4, 'kz-5': 5, 'kz-6': 5, 'kz-7': 4, 'kz-8': 5, 'kz-9': 4, 'kz-10': 5 }
+  });
+
+  // Category Overrides
+  const [categoryOverrides, setCategoryOverrides] = useState<Record<string, CategoryKey>>({});
+
+  // Filters State
+  const [searchQuery, setSearchQuery] = useState('');
+  const [categoryFilter, setCategoryFilter] = useState<string>('All');
+  const [benefitFilter, setBenefitFilter] = useState<string>('All');
+
+  // Inspection Modal
+  const [inspectKaizen, setInspectKaizen] = useState<Kaizen | null>(null);
+
+  // Certificate Modal
+  const [showCertificateModal, setShowCertificateModal] = useState<{
+    categoryTitle: string;
+    rankLabel: string;
+    kaizenTitle: string;
+    winnerName: string;
+    minifactory: string;
+    costSaveText: string;
+    srNo: string;
+    totalScore: number;
+    month: string;
+    year: string;
+  } | null>(null);
+
+  // Toast
   const [toastMsg, setToastMsg] = useState<string | null>(null);
-
   const showToast = (msg: string) => {
     setToastMsg(msg);
-    setTimeout(() => setToastMsg(null), 4000);
+    setTimeout(() => setToastMsg(null), 3000);
   };
 
-  // Filter approved Kaizens and approved/closed PPSRs
-  const approvedKaizens = kaizens.filter(k => k.status === 'Approved' || k.status === 'Good Point');
-  const eligiblePpsrs = ppsrReports.filter(p => p.status === 'Closed' || p.status === 'In-Progress');
+  const availableMonths = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+  const availableYears = ['2026', '2025', '2024'];
 
-  // Compute points for Kaizens
-  // Rank 1 = 3 pts, Rank 2 = 2 pts, Rank 3 = 1 pt
-  const getKaizenScore = (kaizenId: string) => {
-    let score = 0;
-    votes.forEach(v => {
-      const found = v.kaizenVotes.find(kv => kv.kaizenId === kaizenId);
-      if (found) {
-        if (found.rank === 1) score += 3;
-        else if (found.rank === 2) score += 2;
-        else if (found.rank === 3) score += 1;
+  // Filter closed/approved Kaizens for selected month
+  const closedKaizensForMonth = kaizens.filter(k => {
+    const isClosed = k.status === 'Approved' || k.status === 'Good Point';
+    const monthMatches = selectedMonth === 'All' || (k.month && k.month.toLowerCase().includes(selectedMonth.toLowerCase()));
+    return isClosed && monthMatches;
+  });
+
+  // Helper function to resolve category
+  function getKaizenCategory(k: Kaizen): CategoryKey {
+    if (categoryOverrides[k.id]) {
+      return categoryOverrides[k.id];
+    }
+    const mf = (k.minifactory || '').toUpperCase();
+    const loc = (k.location || '').toLowerCase();
+    const area = (k.area || '').toLowerCase();
+    const machine = (k.machine || '').toLowerCase();
+
+    if (mf.includes('MF1') || mf.includes('1') || area.includes('mf1') || loc.includes('pune')) return 'MF1';
+    if (mf.includes('MF2') || mf.includes('2') || area.includes('egr') || area.includes('mf2')) return 'MF2';
+    if (mf.includes('MF3') || mf.includes('3') || area.includes('bpv') || area.includes('mf3')) return 'MF3';
+    if (mf.includes('MACHIN') || area.includes('machin') || machine.includes('cnc') || machine.includes('grind') || machine.includes('mill')) return 'Machining';
+    if (mf.includes('QUAL') || area.includes('qual') || area.includes('cmm') || loc.includes('metrology') || k.classification === 'Good Point') return 'Quality';
+    if (mf.includes('MAINT') || area.includes('maint') || area.includes('utilit') || machine.includes('conduit') || machine.includes('blower')) return 'Maintenance';
+
+    return 'MF1';
+  }
+
+  // Filtered Kaizens for Table
+  const filteredClosedKaizens = closedKaizensForMonth.filter(k => {
+    const cat = getKaizenCategory(k);
+    if (categoryFilter !== 'All' && cat !== categoryFilter) return false;
+
+    if (benefitFilter !== 'All') {
+      const key = benefitFilter.toLowerCase() as 'p' | 'q' | 'c' | 'd' | 's' | 'm';
+      if (!k.benefits?.[key]) return false;
+    }
+
+    if (searchQuery.trim()) {
+      const q = searchQuery.toLowerCase();
+      const matchSr = k.srNo.toLowerCase().includes(q);
+      const matchTitle = k.title.toLowerCase().includes(q);
+      const matchBy = k.ideaBy.toLowerCase().includes(q);
+      const matchLoc = (k.location || '').toLowerCase().includes(q);
+      const matchArea = (k.area || '').toLowerCase().includes(q);
+      return matchSr || matchTitle || matchBy || matchLoc || matchArea;
+    }
+
+    return true;
+  });
+
+  // Calculate Cumulative Score
+  const getCumulativeScore = (kaizenId: string) => {
+    let totalScore = 0;
+    let votesCount = 0;
+
+    presentMemberIds.forEach(memberId => {
+      const rating = ratings[memberId]?.[kaizenId];
+      if (rating && rating > 0) {
+        totalScore += rating;
+        votesCount += 1;
       }
     });
-    return score;
+
+    return { totalScore, votesCount };
   };
 
-  // Compute points for PPSRs
-  const getPpsrScore = (ppsrId: string) => {
-    let score = 0;
-    votes.forEach(v => {
-      const found = v.ppsrVotes.find(pv => pv.ppsrId === ppsrId);
-      if (found) {
-        if (found.rank === 1) score += 3;
-        else if (found.rank === 2) score += 2;
-        else if (found.rank === 3) score += 1;
+  // Toggle Member Attendance
+  const toggleAttendance = (memberId: string) => {
+    if (presentMemberIds.includes(memberId)) {
+      if (presentMemberIds.length === 1) {
+        showToast('At least 1 CFT member must be present for evaluation');
+        return;
       }
-    });
-    return score;
-  };
-
-  // Ranked Kaizens
-  const sortedKaizens = [...approvedKaizens].sort((a, b) => getKaizenScore(b.id) - getKaizenScore(a.id));
-  const topThreeKaizens = sortedKaizens.slice(0, 3);
-
-  // Ranked PPSRs
-  const sortedPpsrs = [...eligiblePpsrs].sort((a, b) => getPpsrScore(b.id) - getPpsrScore(a.id));
-  const topThreePpsrs = sortedPpsrs.slice(0, 3);
-
-  // Cast vote by current active voter
-  const handleCastVote = (category: 'kaizen' | 'ppsr', itemId: string, rank: 1 | 2 | 3) => {
-    const activeMember = cftMembers[activeVoterIndex];
-    if (!activeMember) return;
-
-    setVotes(prevVotes => {
-      const existingVoteIdx = prevVotes.findIndex(v => v.voterName === activeMember.name);
-      let updatedVotes = [...prevVotes];
-
-      if (existingVoteIdx === -1) {
-        const newRecord: VoteRecord = {
-          voterName: activeMember.name,
-          voterRole: activeMember.role,
-          kaizenVotes: category === 'kaizen' ? [{ kaizenId: itemId, rank }] : [],
-          ppsrVotes: category === 'ppsr' ? [{ ppsrId: itemId, rank }] : []
-        };
-        updatedVotes.push(newRecord);
-      } else {
-        const voterRec = { ...updatedVotes[existingVoteIdx] };
-        if (category === 'kaizen') {
-          // Remove any existing rank matching this rank OR matching this item
-          let kList = voterRec.kaizenVotes.filter(kv => kv.kaizenId !== itemId && kv.rank !== rank);
-          kList.push({ kaizenId: itemId, rank });
-          voterRec.kaizenVotes = kList;
-        } else {
-          let pList = voterRec.ppsrVotes.filter(pv => pv.ppsrId !== itemId && pv.rank !== rank);
-          pList.push({ ppsrId: itemId, rank });
-          voterRec.ppsrVotes = pList;
-        }
-        updatedVotes[existingVoteIdx] = voterRec;
-      }
-
-      return updatedVotes;
-    });
-
-    const rankLabel = rank === 1 ? '🥇 1st Choice (3 pts)' : rank === 2 ? '🥈 2nd Choice (2 pts)' : '🥉 3rd Choice (1 pt)';
-    showToast(`Vote recorded for ${activeMember.name}: ${rankLabel}`);
-  };
-
-  // Get current voter's selection for an item
-  const getCurrentVoterRank = (category: 'kaizen' | 'ppsr', itemId: string): 1 | 2 | 3 | null => {
-    const activeMember = cftMembers[activeVoterIndex];
-    if (!activeMember) return null;
-    const v = votes.find(x => x.voterName === activeMember.name);
-    if (!v) return null;
-    if (category === 'kaizen') {
-      const match = v.kaizenVotes.find(k => k.kaizenId === itemId);
-      return match ? match.rank : null;
+      setPresentMemberIds(presentMemberIds.filter(id => id !== memberId));
     } else {
-      const match = v.ppsrVotes.find(p => p.ppsrId === itemId);
-      return match ? match.rank : null;
+      setPresentMemberIds([...presentMemberIds, memberId]);
     }
   };
 
-  // Add new CFT member
-  const handleAddCftMember = () => {
+  // Rate Kaizen
+  const handleRateKaizen = (memberId: string, kaizenId: string, ratingValue: number) => {
+    setRatings(prev => ({
+      ...prev,
+      [memberId]: {
+        ...(prev[memberId] || {}),
+        [kaizenId]: ratingValue
+      }
+    }));
+  };
+
+  // Add Member Inline Right on the Screen!
+  const handleAddMemberInline = (e: React.FormEvent) => {
+    e.preventDefault();
     if (!newMemberName.trim()) return;
-    const newMember = {
+
+    const newMember: CftMember = {
+      id: `cft-${Date.now()}`,
       name: newMemberName.trim(),
-      role: newMemberRole.trim() || 'CFT Committee Member'
+      role: newMemberRole.trim() || 'CFT Reviewer',
+      department: newMemberDept
     };
+
     setCftMembers(prev => [...prev, newMember]);
-    setActiveVoterIndex(cftMembers.length); // auto switch to new member
+    setPresentMemberIds(prev => [...prev, newMember.id]);
     setNewMemberName('');
     setNewMemberRole('');
-    setShowAddMemberModal(false);
-    showToast(`Added ${newMember.name} to CFT Voting Panel.`);
-  };
-
-  // Finalize Awards
-  const handleFinalizeMeeting = () => {
-    setIsFinalized(true);
-
-    // Optionally update remark of top 3 Kaizens and PPSRs
-    if (onUpdateKaizen && topThreeKaizens.length > 0) {
-      topThreeKaizens.forEach((k, idx) => {
-        const medalName = idx === 0 ? '🏆 Gold Award (1st Prize)' : idx === 1 ? '🥈 Silver Award (2nd Prize)' : '🥉 Bronze Award (3rd Prize)';
-        onUpdateKaizen(k.id, {
-          remark: `[CFT MONTHLY AWARD - ${selectedMonth}] Selected as ${medalName} with ${getKaizenScore(k.id)} total CFT votes!`
-        });
-      });
-    }
-
-    if (onUpdatePpsrReport && topThreePpsrs.length > 0) {
-      topThreePpsrs.forEach((p, idx) => {
-        const medalName = idx === 0 ? '🏆 Gold Award (1st Prize)' : idx === 1 ? '🥈 Silver Award (2nd Prize)' : '🥉 Bronze Award (3rd Prize)';
-        onUpdatePpsrReport(p.id, {
-          remarks: `[CFT MONTHLY AWARD - ${selectedMonth}] Selected as ${medalName} with ${getPpsrScore(p.id)} total CFT votes!`
-        });
-      });
-    }
-
-    showToast(`🏆 Official Monthly CFT Awards for ${selectedMonth} have been finalized and declared!`);
+    setShowInlineAddForm(false);
+    showToast(`Added ${newMember.name} to CFT Committee & marked present!`);
   };
 
   return (
-    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-6">
+    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-6 font-sans">
       
-      {/* Toast alert */}
+      {/* Toast Alert */}
       {toastMsg && (
-        <div className="fixed bottom-6 right-6 z-50 bg-slate-900 text-emerald-400 border border-emerald-500 px-4 py-3 rounded-2xl shadow-2xl flex items-center space-x-2 text-xs font-bold font-mono animate-bounce">
-          <CheckCircle2 className="w-4 h-4 text-emerald-400" />
+        <div className="fixed bottom-6 right-6 z-50 bg-slate-900 text-amber-400 border border-amber-500/50 px-4 py-3 rounded-2xl shadow-2xl flex items-center space-x-2 text-xs font-bold font-mono animate-bounce">
+          <CheckCircle2 className="w-4 h-4 text-amber-400" />
           <span>{toastMsg}</span>
         </div>
       )}
 
-      {/* HEADER BANNER */}
-      <div className="bg-gradient-to-r from-slate-950 via-indigo-950 to-slate-950 text-white p-6 rounded-3xl shadow-lg border border-indigo-900/60 relative overflow-hidden">
-        <div className="absolute top-0 right-0 -mt-8 -mr-8 w-48 h-48 bg-amber-500/10 rounded-full blur-3xl pointer-events-none" />
-        
-        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-6 relative z-10">
-          <div>
-            <div className="flex items-center space-x-2">
-              <span className="bg-amber-500/20 text-amber-300 border border-amber-500/40 px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider font-mono flex items-center space-x-1.5">
-                <Trophy className="w-3.5 h-3.5 text-amber-400" />
-                <span>CFT Monthly Excellence Program</span>
-              </span>
-              <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase font-mono ${
-                isFinalized ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40' : 'bg-amber-500/20 text-amber-300 border border-amber-500/30'
-              }`}>
-                {isFinalized ? '✓ Awards Finalized & Published' : '⚡ Voting Session Active'}
-              </span>
+      {/* TOP UNIFIED HEADER BAR */}
+      <div className="bg-slate-950 text-white rounded-3xl p-6 shadow-xl border border-slate-800 space-y-4">
+        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+          
+          <div className="flex items-center space-x-3">
+            <div className="p-3 bg-amber-500/20 text-amber-400 rounded-2xl border border-amber-500/30">
+              <Trophy className="w-7 h-7" />
             </div>
-
-            <h1 className="text-2xl sm:text-3xl font-black font-display tracking-tight text-white mt-2">
-              Monthly CFT Review & Best Awards Voting
-            </h1>
-            <p className="text-xs text-slate-300 mt-1 max-w-2xl font-sans">
-              Cross-Functional Team (CFT) monthly assembly where all approved Kaizens and closed PPSR problem-solving reports are presented. Committee members cast votes to select the <strong>Top 3 Best Kaizens</strong> and <strong>Top 3 Best PPSRs</strong> for monthly honors and monetary rewards.
-            </p>
+            <div>
+              <div className="flex items-center space-x-2">
+                <span className="text-[10px] font-mono uppercase font-black tracking-widest text-amber-400 bg-amber-500/10 px-2.5 py-0.5 rounded border border-amber-500/20">
+                  SINGLE-SCREEN EVALUATION DESK
+                </span>
+              </div>
+              <h1 className="text-2xl font-black font-display text-white mt-0.5">
+                Monthly Best Kaizen Awards & CFT Evaluation
+              </h1>
+              <p className="text-xs text-slate-400 mt-0.5">
+                Rate closed Kaizens in real-time with present CFT reviewers and calculate department winners instantly on a single screen.
+              </p>
+            </div>
           </div>
 
-          {/* Month selector & Finalize button */}
-          <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 shrink-0">
-            <div className="bg-slate-900/90 border border-slate-800 rounded-2xl p-2.5 flex items-center space-x-2">
-              <Calendar className="w-4 h-4 text-indigo-400 shrink-0" />
+          {/* Month, Year & Print Controls */}
+          <div className="flex flex-wrap items-center gap-3">
+            <div className="flex items-center space-x-2 bg-slate-900 px-3.5 py-2 rounded-2xl border border-slate-800 font-mono text-xs">
+              <Calendar className="w-4 h-4 text-amber-400 shrink-0" />
+              <span className="text-slate-400 font-bold">Month:</span>
               <select
                 value={selectedMonth}
                 onChange={(e) => setSelectedMonth(e.target.value)}
-                className="bg-transparent text-white text-xs font-bold font-mono focus:outline-none cursor-pointer"
+                className="bg-slate-950 text-amber-300 font-black py-1 px-2.5 rounded-xl border border-slate-700 focus:outline-none cursor-pointer"
               >
-                <option value="July 2026" className="bg-slate-900 text-white">July 2026 Meeting</option>
-                <option value="August 2026" className="bg-slate-900 text-white">August 2026 Meeting</option>
-                <option value="June 2026" className="bg-slate-900 text-white">June 2026 Meeting</option>
+                {availableMonths.map(m => (
+                  <option key={m} value={m}>{m}</option>
+                ))}
+              </select>
+
+              <span className="text-slate-400 font-bold ml-2">Year:</span>
+              <select
+                value={selectedYear}
+                onChange={(e) => setSelectedYear(e.target.value)}
+                className="bg-slate-950 text-amber-300 font-black py-1 px-2.5 rounded-xl border border-slate-700 focus:outline-none cursor-pointer"
+              >
+                {availableYears.map(y => (
+                  <option key={y} value={y}>{y}</option>
+                ))}
               </select>
             </div>
 
-            {!isFinalized ? (
-              <button
-                type="button"
-                onClick={handleFinalizeMeeting}
-                className="px-5 py-2.5 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 font-black font-mono text-xs rounded-2xl shadow-lg transition active:scale-95 flex items-center justify-center space-x-2 border border-amber-400 cursor-pointer"
-              >
-                <Trophy className="w-4 h-4" />
-                <span>FINALIZE & DECLARE AWARDS</span>
-              </button>
-            ) : (
-              <button
-                type="button"
-                onClick={() => window.print()}
-                className="px-5 py-2.5 bg-slate-800 hover:bg-slate-700 text-white font-bold font-mono text-xs rounded-2xl transition flex items-center justify-center space-x-2 border border-slate-700 cursor-pointer"
-              >
-                <Printer className="w-4 h-4 text-emerald-400" />
-                <span>PRINT CFT MEETING MINUTES</span>
-              </button>
-            )}
+            <button
+              type="button"
+              onClick={() => window.print()}
+              className="px-4 py-2.5 bg-amber-500 hover:bg-amber-400 text-slate-950 font-black font-mono text-xs rounded-2xl shadow-md transition flex items-center space-x-2 cursor-pointer border border-amber-300"
+            >
+              <Printer className="w-4 h-4" />
+              <span>PRINT MINUTES</span>
+            </button>
+          </div>
+
+        </div>
+
+        {/* Real-time Stats Badges */}
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 pt-3 border-t border-slate-800/80 font-mono text-xs">
+          <div className="bg-slate-900/80 p-3 rounded-2xl border border-slate-800">
+            <span className="text-[10px] text-slate-400 uppercase font-bold block">Closed Kaizens</span>
+            <span className="text-lg font-black text-emerald-400 mt-0.5 block">{closedKaizensForMonth.length} items</span>
+          </div>
+          <div className="bg-slate-900/80 p-3 rounded-2xl border border-slate-800">
+            <span className="text-[10px] text-slate-400 uppercase font-bold block">Active CFT Voters</span>
+            <span className="text-lg font-black text-amber-400 mt-0.5 block">{presentMemberIds.length} / {cftMembers.length} present</span>
+          </div>
+          <div className="bg-slate-900/80 p-3 rounded-2xl border border-slate-800">
+            <span className="text-[10px] text-slate-400 uppercase font-bold block">Winner Podiums</span>
+            <span className="text-lg font-black text-blue-400 mt-0.5 block">7 Award Categories</span>
+          </div>
+          <div className="bg-slate-900/80 p-3 rounded-2xl border border-slate-800">
+            <span className="text-[10px] text-slate-400 uppercase font-bold block">Evaluation Mode</span>
+            <span className="text-lg font-black text-purple-400 mt-0.5 block">1-5 Stars Scoring</span>
           </div>
         </div>
       </div>
 
-      {/* CFT MEETING ATTENDEES & METADATA BAR */}
-      <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-xs space-y-3">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-100 pb-3">
+      {/* INTEGRATED CFT MEMBER PANEL & INLINE TEAM ADDITION */}
+      <div className="bg-white border border-slate-200 rounded-3xl p-5 shadow-xs space-y-4">
+        
+        <div className="flex items-center justify-between border-b border-slate-100 pb-3">
           <div className="flex items-center space-x-2">
-            <Users className="w-4 h-4 text-indigo-600" />
-            <h2 className="text-xs font-bold uppercase tracking-wider text-slate-800 font-mono">
-              CFT Committee Assembly Details
-            </h2>
+            <Users className="w-5 h-5 text-indigo-600" />
+            <h3 className="text-sm font-black font-mono text-slate-900 uppercase">
+              CFT Review Committee Attendance ({presentMemberIds.length} Present)
+            </h3>
           </div>
-          <div className="text-[11px] text-slate-500 font-mono">
-            Date: <input type="date" value={meetingDate} onChange={(e) => setMeetingDate(e.target.value)} className="font-bold text-slate-800 bg-slate-50 px-2 py-0.5 rounded border border-slate-200" />
+
+          <div className="flex items-center space-x-2">
+            <button
+              type="button"
+              onClick={() => setShowInlineAddForm(!showInlineAddForm)}
+              className="px-3.5 py-1.5 bg-slate-900 hover:bg-slate-800 text-amber-400 font-mono text-xs font-bold rounded-xl transition flex items-center space-x-1.5 shadow-2xs cursor-pointer"
+            >
+              <Plus className="w-3.5 h-3.5 text-amber-400" />
+              <span>{showInlineAddForm ? 'Cancel Add Member' : '+ Add New Committee Member'}</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setIsAttendanceExpanded(!isAttendanceExpanded)}
+              className="p-1.5 hover:bg-slate-100 rounded-xl text-slate-500 transition cursor-pointer"
+            >
+              {isAttendanceExpanded ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+            </button>
           </div>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs font-sans">
-          <div>
-            <label className="block text-[10px] font-bold text-slate-400 uppercase font-mono mb-1">
-              Chairperson / Lead Moderator
-            </label>
-            <input
-              type="text"
-              value={chairperson}
-              onChange={(e) => setChairperson(e.target.value)}
-              className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-1.5 font-bold text-slate-800 focus:outline-none"
-            />
-          </div>
-          <div>
-            <label className="block text-[10px] font-bold text-slate-400 uppercase font-mono mb-1">
-              Cross-Functional Team Attendees
-            </label>
-            <input
-              type="text"
-              value={attendees}
-              onChange={(e) => setAttendees(e.target.value)}
-              className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-1.5 font-bold text-slate-800 focus:outline-none"
-            />
-          </div>
-        </div>
-      </div>
+        {/* INLINE ADD NEW TEAM MEMBER FORM RIGHT ON THE SCREEN */}
+        {showInlineAddForm && (
+          <form onSubmit={handleAddMemberInline} className="bg-slate-900 text-white p-4 rounded-2xl border border-slate-800 space-y-3 animate-fade-in font-mono">
+            <span className="text-[10px] font-black uppercase text-amber-400 tracking-wider block">
+              ⚡ QUICK ADD NEW COMMITTEE MEMBER TO SESSION
+            </span>
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs">
+              <div>
+                <label className="block text-[10px] text-slate-400 uppercase mb-1">Full Name: *</label>
+                <input
+                  required
+                  type="text"
+                  value={newMemberName}
+                  onChange={(e) => setNewMemberName(e.target.value)}
+                  placeholder="e.g. Ketan Patil"
+                  className="w-full bg-slate-950 border border-slate-700 text-white px-3 py-1.5 rounded-xl font-bold focus:outline-none focus:ring-1 focus:ring-amber-400"
+                />
+              </div>
 
-      {/* TOP 3 WINNERS LEADERBOARD PREVIEW */}
-      <div className="bg-slate-900 border border-slate-800 rounded-3xl p-6 text-white shadow-xl space-y-6">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-800 pb-4">
-          <div>
-            <div className="flex items-center space-x-2">
-              <Trophy className="w-5 h-5 text-amber-400" />
-              <h2 className="text-sm font-extrabold uppercase font-mono tracking-wider text-amber-400">
-                🏆 OFFICIAL TOP 3 CFT WINNERS ({selectedMonth})
-              </h2>
+              <div>
+                <label className="block text-[10px] text-slate-400 uppercase mb-1">Designation / Role:</label>
+                <input
+                  type="text"
+                  value={newMemberRole}
+                  onChange={(e) => setNewMemberRole(e.target.value)}
+                  placeholder="e.g. Process Engineer"
+                  className="w-full bg-slate-950 border border-slate-700 text-white px-3 py-1.5 rounded-xl font-bold focus:outline-none focus:ring-1 focus:ring-amber-400"
+                />
+              </div>
+
+              <div>
+                <label className="block text-[10px] text-slate-400 uppercase mb-1">Department:</label>
+                <select
+                  value={newMemberDept}
+                  onChange={(e) => setNewMemberDept(e.target.value)}
+                  className="w-full bg-slate-950 border border-slate-700 text-amber-300 px-3 py-1.5 rounded-xl font-bold focus:outline-none cursor-pointer"
+                >
+                  <option value="Operations">Operations</option>
+                  <option value="Quality">Quality</option>
+                  <option value="Engineering">Engineering</option>
+                  <option value="Maintenance">Maintenance</option>
+                  <option value="Machining">Machining</option>
+                </select>
+              </div>
             </div>
-            <p className="text-xs text-slate-400 mt-1">
-              Top 3 Kaizens & Top 3 PPSRs decided by CFT majority voting tallies
-            </p>
-          </div>
 
-          <div className="flex bg-slate-950 p-1 rounded-xl border border-slate-800 self-start sm:self-auto">
-            <button
-              onClick={() => setActiveCategory('kaizen')}
-              className={`px-4 py-1.5 rounded-lg text-xs font-bold font-mono transition flex items-center space-x-2 ${
-                activeCategory === 'kaizen'
-                  ? 'bg-amber-500 text-slate-950 shadow-md'
-                  : 'text-slate-400 hover:text-white'
-              }`}
-            >
-              <Lightbulb className="w-3.5 h-3.5" />
-              <span>💡 TOP 3 KAIZENS ({sortedKaizens.length})</span>
-            </button>
-            <button
-              onClick={() => setActiveCategory('ppsr')}
-              className={`px-4 py-1.5 rounded-lg text-xs font-bold font-mono transition flex items-center space-x-2 ${
-                activeCategory === 'ppsr'
-                  ? 'bg-amber-500 text-slate-950 shadow-md'
-                  : 'text-slate-400 hover:text-white'
-              }`}
-            >
-              <Compass className="w-3.5 h-3.5" />
-              <span>🧠 TOP 3 PPSRS ({sortedPpsrs.length})</span>
-            </button>
-          </div>
-        </div>
+            <div className="flex justify-end pt-1">
+              <button
+                type="submit"
+                className="px-4 py-2 bg-amber-500 hover:bg-amber-400 text-slate-950 font-black text-xs rounded-xl transition flex items-center space-x-1.5 shadow-md cursor-pointer"
+              >
+                <Check className="w-4 h-4 stroke-[3px]" />
+                <span>SAVE & MARK PRESENT</span>
+              </button>
+            </div>
+          </form>
+        )}
 
-        {/* TOP 3 PODIUM CARDS */}
-        {activeCategory === 'kaizen' ? (
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            {[0, 1, 2].map((rankIndex) => {
-              const item = topThreeKaizens[rankIndex];
-              const score = item ? getKaizenScore(item.id) : 0;
-              const rank = (rankIndex + 1) as 1 | 2 | 3;
-              const titleBadge = rank === 1 ? '🥇 1st Prize (Gold Award)' : rank === 2 ? '🥈 2nd Prize (Silver Award)' : '🥉 3rd Prize (Bronze Award)';
-              const badgeBg = rank === 1 ? 'from-amber-500 to-yellow-600 border-amber-400 text-slate-950' : rank === 2 ? 'from-slate-300 to-slate-400 border-slate-200 text-slate-950' : 'from-amber-700 to-amber-800 border-amber-600 text-white';
-              const cashPrize = rank === 1 ? '₹5,000 + Gold Trophy' : rank === 2 ? '₹3,000 + Silver Shield' : '₹1,500 + Medal';
+        {/* EXPANDABLE ATTENDANCE CHIPS */}
+        {isAttendanceExpanded && (
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-7 gap-2.5">
+            {cftMembers.map((m) => {
+              const isPresent = presentMemberIds.includes(m.id);
 
               return (
                 <div
-                  key={rankIndex}
-                  className={`bg-slate-950/80 border rounded-2xl p-5 flex flex-col justify-between relative overflow-hidden transition ${
-                    rank === 1 ? 'border-amber-500/60 ring-2 ring-amber-500/20' : 'border-slate-800'
+                  key={m.id}
+                  onClick={() => toggleAttendance(m.id)}
+                  className={`p-3 rounded-2xl border-2 transition cursor-pointer select-none space-y-1 ${
+                    isPresent
+                      ? 'bg-emerald-50/70 border-emerald-500 text-slate-900 shadow-2xs'
+                      : 'bg-slate-50 border-slate-200 text-slate-400 hover:border-slate-300'
                   }`}
                 >
-                  <div>
-                    {/* Rank Badge Header */}
-                    <div className="flex items-center justify-between mb-3">
-                      <span className={`px-3 py-1 rounded-xl text-[10px] font-black font-mono uppercase tracking-wider bg-gradient-to-r ${badgeBg} shadow-md`}>
-                        {titleBadge}
-                      </span>
-                      <span className="text-xs font-mono font-bold text-amber-400 bg-amber-500/10 px-2 py-0.5 rounded border border-amber-500/20">
-                        {score} Votes
-                      </span>
-                    </div>
-
-                    {item ? (
-                      <div className="space-y-3">
-                        <div className="text-[10px] text-slate-500 font-mono font-bold">
-                          ID: {item.srNo} • {item.month}
-                        </div>
-                        <h3 className="text-sm font-bold text-white leading-snug line-clamp-2">
-                          {item.title}
-                        </h3>
-
-                        <div className="bg-slate-900/90 rounded-xl p-3 border border-slate-800 text-xs space-y-1.5 font-sans">
-                          <div className="flex justify-between">
-                            <span className="text-slate-400 text-[10px] font-mono">Idea Creator:</span>
-                            <span className="font-bold text-emerald-400">{item.ideaBy}</span>
-                          </div>
-                          <div className="flex justify-between">
-                            <span className="text-slate-400 text-[10px] font-mono">Area / Station:</span>
-                            <span className="font-bold text-slate-200 truncate max-w-[150px]">{item.minifactory} • {item.location}</span>
-                          </div>
-                          <div className="flex justify-between pt-1 border-t border-slate-800">
-                            <span className="text-slate-400 text-[10px] font-mono">Verified Savings:</span>
-                            <span className="font-mono font-bold text-amber-400">{formatIndianRupees(item.costSave)}/yr</span>
-                          </div>
-                        </div>
-
-                        <div className="bg-amber-500/10 border border-amber-500/20 rounded-xl p-2.5 text-[11px] text-amber-300 font-mono flex items-center justify-between">
-                          <span>Reward Package:</span>
-                          <span className="font-bold text-amber-400">{cashPrize}</span>
-                        </div>
-                      </div>
-                    ) : (
-                      <div className="py-8 text-center text-xs text-slate-600 italic">
-                        No Kaizen voted for position #{rank} yet.
-                      </div>
-                    )}
+                  <div className="flex items-center justify-between">
+                    <span className={`w-2 h-2 rounded-full ${isPresent ? 'bg-emerald-500' : 'bg-slate-300'}`} />
+                    <span className={`text-[10px] font-mono font-bold ${isPresent ? 'text-emerald-700' : 'text-slate-400'}`}>
+                      {isPresent ? 'PRESENT' : 'ABSENT'}
+                    </span>
                   </div>
 
-                  {item && (
-                    <button
-                      type="button"
-                      onClick={() => setShowCertificateModal({
-                        type: 'Kaizen',
-                        rank: rank,
-                        title: item.title,
-                        winnerName: item.ideaBy,
-                        area: `${item.minifactory} (${item.location})`,
-                        costSaveText: `${formatIndianRupees(item.costSave)} / year`,
-                        srNo: item.srNo
-                      })}
-                      className="mt-4 w-full py-2 bg-indigo-600/30 hover:bg-indigo-600/50 text-indigo-300 border border-indigo-500/30 rounded-xl text-xs font-mono font-bold transition flex items-center justify-center space-x-1.5 cursor-pointer"
-                    >
-                      <Award className="w-3.5 h-3.5 text-indigo-400" />
-                      <span>VIEW AWARD CERTIFICATE</span>
-                    </button>
-                  )}
-                </div>
-              );
-            })}
-          </div>
-        ) : (
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            {[0, 1, 2].map((rankIndex) => {
-              const item = topThreePpsrs[rankIndex];
-              const score = item ? getPpsrScore(item.id) : 0;
-              const rank = (rankIndex + 1) as 1 | 2 | 3;
-              const titleBadge = rank === 1 ? '🥇 1st Prize (Gold Award)' : rank === 2 ? '🥈 2nd Prize (Silver Award)' : '🥉 3rd Prize (Bronze Award)';
-              const badgeBg = rank === 1 ? 'from-amber-500 to-yellow-600 border-amber-400 text-slate-950' : rank === 2 ? 'from-slate-300 to-slate-400 border-slate-200 text-slate-950' : 'from-amber-700 to-amber-800 border-amber-600 text-white';
-              const cashPrize = rank === 1 ? '₹10,000 + Gold Trophy' : rank === 2 ? '₹6,000 + Silver Shield' : '₹3,000 + Medal';
-
-              return (
-                <div
-                  key={rankIndex}
-                  className={`bg-slate-950/80 border rounded-2xl p-5 flex flex-col justify-between relative overflow-hidden transition ${
-                    rank === 1 ? 'border-amber-500/60 ring-2 ring-amber-500/20' : 'border-slate-800'
-                  }`}
-                >
-                  <div>
-                    {/* Rank Badge Header */}
-                    <div className="flex items-center justify-between mb-3">
-                      <span className={`px-3 py-1 rounded-xl text-[10px] font-black font-mono uppercase tracking-wider bg-gradient-to-r ${badgeBg} shadow-md`}>
-                        {titleBadge}
-                      </span>
-                      <span className="text-xs font-mono font-bold text-amber-400 bg-amber-500/10 px-2 py-0.5 rounded border border-amber-500/20">
-                        {score} Votes
-                      </span>
-                    </div>
-
-                    {item ? (
-                      <div className="space-y-3">
-                        <div className="text-[10px] text-slate-500 font-mono font-bold">
-                          ID: {item.ppsrNo}
-                        </div>
-                        <h3 className="text-sm font-bold text-white leading-snug line-clamp-2">
-                          {item.title}
-                        </h3>
-
-                        <div className="bg-slate-900/90 rounded-xl p-3 border border-slate-800 text-xs space-y-1.5 font-sans">
-                          <div className="flex justify-between">
-                            <span className="text-slate-400 text-[10px] font-mono">Lead Problem Solver:</span>
-                            <span className="font-bold text-violet-400">{item.leadOwner || item.projectLeader}</span>
-                          </div>
-                          <div className="flex justify-between">
-                            <span className="text-slate-400 text-[10px] font-mono">Plant / Station:</span>
-                            <span className="font-bold text-slate-200 truncate max-w-[150px]">{item.plant || 'Main Plant'}</span>
-                          </div>
-                          <div className="flex justify-between pt-1 border-t border-slate-800">
-                            <span className="text-slate-400 text-[10px] font-mono">Monthly Savings:</span>
-                            <span className="font-mono font-bold text-amber-400">{formatIndianRupees(item.costSavePerMonth || 250000)}/mo</span>
-                          </div>
-                        </div>
-
-                        <div className="bg-amber-500/10 border border-amber-500/20 rounded-xl p-2.5 text-[11px] text-amber-300 font-mono flex items-center justify-between">
-                          <span>Reward Package:</span>
-                          <span className="font-bold text-amber-400">{cashPrize}</span>
-                        </div>
-                      </div>
-                    ) : (
-                      <div className="py-8 text-center text-xs text-slate-600 italic">
-                        No PPSR voted for position #{rank} yet.
-                      </div>
-                    )}
-                  </div>
-
-                  {item && (
-                    <button
-                      type="button"
-                      onClick={() => setShowCertificateModal({
-                        type: 'PPSR',
-                        rank: rank,
-                        title: item.title,
-                        winnerName: item.leadOwner || item.projectLeader || 'CFT Team',
-                        area: item.plant || 'Manufacturing Plant',
-                        costSaveText: `${formatIndianRupees(item.costSavePerMonth || 250000)} / month`,
-                        srNo: item.ppsrNo
-                      })}
-                      className="mt-4 w-full py-2 bg-violet-600/30 hover:bg-violet-600/50 text-violet-300 border border-violet-500/30 rounded-xl text-xs font-mono font-bold transition flex items-center justify-center space-x-1.5 cursor-pointer"
-                    >
-                      <Award className="w-3.5 h-3.5 text-violet-400" />
-                      <span>VIEW AWARD CERTIFICATE</span>
-                    </button>
-                  )}
+                  <h4 className={`text-xs font-bold truncate ${isPresent ? 'text-slate-900' : 'text-slate-500 line-through'}`}>
+                    {m.name}
+                  </h4>
+                  <p className="text-[10px] font-mono text-slate-500 truncate">{m.role}</p>
                 </div>
               );
             })}
           </div>
         )}
+
       </div>
 
-      {/* VOTING CONTROL PANEL - SELECT VOTER AND CAST VOTES */}
-      <div className="bg-white border border-slate-200 rounded-2xl p-6 shadow-xs space-y-6">
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-slate-100 pb-4">
-          <div>
-            <h2 className="text-sm font-black text-slate-900 uppercase font-mono tracking-wide flex items-center space-x-2">
-              <Vote className="w-5 h-5 text-indigo-600" />
-              <span>🗳️ CFT MEMBER VOTING TERMINAL</span>
-            </h2>
-            <p className="text-xs text-slate-500 mt-0.5">
-              Select your CFT identity below, review the candidate Kaizens and PPSRs, and cast your 1st (3 pts), 2nd (2 pts), and 3rd (1 pt) choices.
-            </p>
-          </div>
+      {/* TOP FILTERS BAR */}
+      <div className="bg-white border border-slate-200 rounded-2xl p-4 shadow-xs grid grid-cols-1 md:grid-cols-12 gap-3 text-xs font-mono">
+        
+        {/* Search Input */}
+        <div className="md:col-span-5 relative">
+          <Search className="w-4 h-4 text-slate-400 absolute left-3 top-2.5" />
+          <input
+            type="text"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            placeholder="Search by SR No, Title, Initiator, Location..."
+            className="w-full bg-slate-50 border border-slate-300 text-slate-900 rounded-xl pl-9 pr-3 py-2 text-xs font-bold focus:outline-none focus:ring-2 focus:ring-amber-500"
+          />
+        </div>
 
-          <button
-            type="button"
-            onClick={() => setShowAddMemberModal(true)}
-            className="px-3.5 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-800 text-xs font-bold font-mono rounded-xl transition flex items-center space-x-1.5 border border-slate-200 self-start md:self-auto cursor-pointer"
+        {/* Minifactory / Department */}
+        <div className="md:col-span-4 flex items-center space-x-2">
+          <Filter className="w-4 h-4 text-slate-400 shrink-0" />
+          <span className="text-slate-500 font-bold shrink-0">Dept:</span>
+          <select
+            value={categoryFilter}
+            onChange={(e) => setCategoryFilter(e.target.value)}
+            className="w-full bg-slate-50 border border-slate-300 text-slate-900 text-xs font-bold py-2 px-2.5 rounded-xl focus:outline-none focus:ring-2 focus:ring-amber-500 cursor-pointer"
           >
-            <Plus className="w-4 h-4 text-indigo-600" />
-            <span>Add CFT Member</span>
-          </button>
+            <option value="All">All Minifactories & Depts</option>
+            <option value="MF1">MF1 (Vacuum Pump)</option>
+            <option value="MF2">MF2 (EGR Line)</option>
+            <option value="MF3">MF3 (BPV Sensors)</option>
+            <option value="Machining">Machining Shop</option>
+            <option value="Quality">Quality Assurance</option>
+            <option value="Maintenance">Maintenance & Utilities</option>
+          </select>
         </div>
 
-        {/* SELECT ACTIVE VOTER BADGES */}
-        <div className="space-y-2">
-          <label className="block text-[10px] font-bold text-slate-400 uppercase font-mono tracking-wider">
-            1. Select Active CFT Voter Profile:
-          </label>
-          <div className="flex flex-wrap gap-2">
-            {cftMembers.map((member, idx) => {
-              const isActive = activeVoterIndex === idx;
-              const voterHasCast = votes.some(v => v.voterName === member.name && (v.kaizenVotes.length > 0 || v.ppsrVotes.length > 0));
-
-              return (
-                <button
-                  key={member.name}
-                  type="button"
-                  onClick={() => setActiveVoterIndex(idx)}
-                  className={`px-3.5 py-2 rounded-xl text-xs font-bold transition flex items-center space-x-2 cursor-pointer ${
-                    isActive
-                      ? 'bg-slate-900 text-white shadow-md border border-slate-900'
-                      : 'bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-200'
-                  }`}
-                >
-                  <UserCheck className={`w-3.5 h-3.5 ${isActive ? 'text-amber-400' : 'text-slate-400'}`} />
-                  <span>{member.name}</span>
-                  <span className={`text-[9px] px-1.5 py-0.5 rounded font-mono ${
-                    isActive ? 'bg-slate-800 text-slate-300' : 'bg-slate-200 text-slate-600'
-                  }`}>
-                    {member.role}
-                  </span>
-                  {voterHasCast && (
-                    <span className="w-2 h-2 rounded-full bg-emerald-500" title="Vote recorded" />
-                  )}
-                </button>
-              );
-            })}
-          </div>
+        {/* PQCDSM Benefit */}
+        <div className="md:col-span-3 flex items-center space-x-2">
+          <span className="text-slate-500 font-bold shrink-0">PQCDSM:</span>
+          <select
+            value={benefitFilter}
+            onChange={(e) => setBenefitFilter(e.target.value)}
+            className="w-full bg-slate-50 border border-slate-300 text-slate-900 text-xs font-bold py-2 px-2.5 rounded-xl focus:outline-none focus:ring-2 focus:ring-amber-500 cursor-pointer"
+          >
+            <option value="All">All Benefits</option>
+            <option value="p">P - Productivity</option>
+            <option value="q">Q - Quality</option>
+            <option value="c">C - Cost</option>
+            <option value="d">D - Delivery</option>
+            <option value="s">S - Safety</option>
+            <option value="m">M - Morale</option>
+          </select>
         </div>
 
-        {/* CANDIDATE VOTING LISTS */}
-        <div className="space-y-4">
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-bold text-slate-800 uppercase font-mono">
-              2. Cast Votes for: {activeCategory === 'kaizen' ? '💡 Approved Kaizens' : '🧠 Closed / Active PPSRs'}
-            </span>
-            <span className="text-[11px] text-slate-500 font-mono">
-              Currently voting as: <strong>{cftMembers[activeVoterIndex]?.name}</strong> ({cftMembers[activeVoterIndex]?.role})
-            </span>
-          </div>
-
-          {activeCategory === 'kaizen' ? (
-            <div className="divide-y divide-slate-100 border border-slate-200 rounded-2xl overflow-hidden">
-              {approvedKaizens.length === 0 ? (
-                <div className="p-6 text-center text-xs text-slate-400">
-                  No approved Kaizens found in database yet.
-                </div>
-              ) : (
-                approvedKaizens.map(k => {
-                  const currentScore = getKaizenScore(k.id);
-                  const voterRank = getCurrentVoterRank('kaizen', k.id);
-
-                  return (
-                    <div key={k.id} className="p-4 hover:bg-slate-50/80 transition flex flex-col md:flex-row md:items-center justify-between gap-4">
-                      <div className="space-y-1 max-w-xl">
-                        <div className="flex items-center space-x-2">
-                          <span className="text-[10px] font-bold font-mono text-slate-400">{k.srNo}</span>
-                          <span className="text-[10px] font-bold bg-emerald-100 text-emerald-800 px-2 py-0.5 rounded font-mono">
-                            {k.classification}
-                          </span>
-                          <span className="text-[10px] font-bold text-slate-500 font-mono">
-                            {k.minifactory} • {k.location}
-                          </span>
-                        </div>
-                        <h4 className="text-xs font-bold text-slate-900 leading-snug">{k.title}</h4>
-                        <p className="text-[11px] text-slate-500 line-clamp-1">
-                          Idea By: <strong>{k.ideaBy}</strong> • Annual Savings: <strong>{formatIndianRupees(k.costSave)}/yr</strong>
-                        </p>
-                      </div>
-
-                      {/* Vote Buttons */}
-                      <div className="flex items-center space-x-2 shrink-0">
-                        <div className="text-right mr-3 hidden sm:block font-mono">
-                          <div className="text-xs font-bold text-slate-900">{currentScore} pts</div>
-                          <div className="text-[9px] text-slate-400 uppercase">Total Score</div>
-                        </div>
-
-                        <button
-                          type="button"
-                          onClick={() => handleCastVote('kaizen', k.id, 1)}
-                          className={`px-3 py-1.5 rounded-xl text-xs font-bold font-mono transition flex items-center space-x-1 cursor-pointer ${
-                            voterRank === 1
-                              ? 'bg-amber-500 text-slate-950 shadow-sm ring-2 ring-amber-400'
-                              : 'bg-slate-100 hover:bg-amber-100 text-slate-700'
-                          }`}
-                        >
-                          <span>🥇 1st Choice (+3)</span>
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => handleCastVote('kaizen', k.id, 2)}
-                          className={`px-3 py-1.5 rounded-xl text-xs font-bold font-mono transition flex items-center space-x-1 cursor-pointer ${
-                            voterRank === 2
-                              ? 'bg-slate-400 text-slate-950 shadow-sm ring-2 ring-slate-300'
-                              : 'bg-slate-100 hover:bg-slate-200 text-slate-700'
-                          }`}
-                        >
-                          <span>🥈 2nd Choice (+2)</span>
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => handleCastVote('kaizen', k.id, 3)}
-                          className={`px-3 py-1.5 rounded-xl text-xs font-bold font-mono transition flex items-center space-x-1 cursor-pointer ${
-                            voterRank === 3
-                              ? 'bg-amber-700 text-white shadow-sm ring-2 ring-amber-600'
-                              : 'bg-slate-100 hover:bg-amber-50 text-slate-700'
-                          }`}
-                        >
-                          <span>🥉 3rd Choice (+1)</span>
-                        </button>
-                      </div>
-                    </div>
-                  );
-                })
-              )}
-            </div>
-          ) : (
-            <div className="divide-y divide-slate-100 border border-slate-200 rounded-2xl overflow-hidden">
-              {eligiblePpsrs.length === 0 ? (
-                <div className="p-6 text-center text-xs text-slate-400">
-                  No eligible PPSRs found in database yet.
-                </div>
-              ) : (
-                eligiblePpsrs.map(p => {
-                  const currentScore = getPpsrScore(p.id);
-                  const voterRank = getCurrentVoterRank('ppsr', p.id);
-
-                  return (
-                    <div key={p.id} className="p-4 hover:bg-slate-50/80 transition flex flex-col md:flex-row md:items-center justify-between gap-4">
-                      <div className="space-y-1 max-w-xl">
-                        <div className="flex items-center space-x-2">
-                          <span className="text-[10px] font-bold font-mono text-slate-400">{p.ppsrNo}</span>
-                          <span className={`text-[10px] font-bold px-2 py-0.5 rounded font-mono ${
-                            p.status === 'Closed' ? 'bg-emerald-100 text-emerald-800' : 'bg-blue-100 text-blue-800'
-                          }`}>
-                            {p.status}
-                          </span>
-                          <span className="text-[10px] font-bold text-slate-500 font-mono">
-                            {p.plant || 'Main Plant'}
-                          </span>
-                        </div>
-                        <h4 className="text-xs font-bold text-slate-900 leading-snug">{p.title}</h4>
-                        <p className="text-[11px] text-slate-500 line-clamp-1">
-                          Lead Owner: <strong>{p.leadOwner || p.projectLeader}</strong> • Monthly Savings: <strong>{formatIndianRupees(p.costSavePerMonth || 250000)}/mo</strong>
-                        </p>
-                      </div>
-
-                      {/* Vote Buttons */}
-                      <div className="flex items-center space-x-2 shrink-0">
-                        <div className="text-right mr-3 hidden sm:block font-mono">
-                          <div className="text-xs font-bold text-slate-900">{currentScore} pts</div>
-                          <div className="text-[9px] text-slate-400 uppercase">Total Score</div>
-                        </div>
-
-                        <button
-                          type="button"
-                          onClick={() => handleCastVote('ppsr', p.id, 1)}
-                          className={`px-3 py-1.5 rounded-xl text-xs font-bold font-mono transition flex items-center space-x-1 cursor-pointer ${
-                            voterRank === 1
-                              ? 'bg-amber-500 text-slate-950 shadow-sm ring-2 ring-amber-400'
-                              : 'bg-slate-100 hover:bg-amber-100 text-slate-700'
-                          }`}
-                        >
-                          <span>🥇 1st Choice (+3)</span>
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => handleCastVote('ppsr', p.id, 2)}
-                          className={`px-3 py-1.5 rounded-xl text-xs font-bold font-mono transition flex items-center space-x-1 cursor-pointer ${
-                            voterRank === 2
-                              ? 'bg-slate-400 text-slate-950 shadow-sm ring-2 ring-slate-300'
-                              : 'bg-slate-100 hover:bg-slate-200 text-slate-700'
-                          }`}
-                        >
-                          <span>🥈 2nd Choice (+2)</span>
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => handleCastVote('ppsr', p.id, 3)}
-                          className={`px-3 py-1.5 rounded-xl text-xs font-bold font-mono transition flex items-center space-x-1 cursor-pointer ${
-                            voterRank === 3
-                              ? 'bg-amber-700 text-white shadow-sm ring-2 ring-amber-600'
-                              : 'bg-slate-100 hover:bg-amber-50 text-slate-700'
-                          }`}
-                        >
-                          <span>🥉 3rd Choice (+1)</span>
-                        </button>
-                      </div>
-                    </div>
-                  );
-                })
-              )}
-            </div>
-          )}
-        </div>
       </div>
 
-      {/* ADD MEMBER MODAL */}
-      {showAddMemberModal && (
-        <div className="fixed inset-0 bg-slate-950/70 backdrop-blur-xs z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-3xl max-w-md w-full p-6 shadow-2xl border border-slate-200 space-y-4">
-            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
-              <h3 className="text-sm font-bold font-mono uppercase text-slate-900 flex items-center space-x-2">
-                <Users className="w-4 h-4 text-indigo-600" />
-                <span>Add CFT Committee Member</span>
-              </h3>
-              <button onClick={() => setShowAddMemberModal(false)} className="text-slate-400 hover:text-slate-700 p-1">
-                <X className="w-5 h-5" />
-              </button>
+      {/* MAIN UNIFIED TABULAR SCORING BOARD */}
+      <div className="bg-white border border-slate-200 rounded-3xl shadow-sm overflow-hidden">
+        
+        <div className="p-4 bg-slate-900 text-white flex items-center justify-between border-b border-slate-800">
+          <div className="flex items-center space-x-2">
+            <Star className="w-4 h-4 text-amber-400" />
+            <h3 className="font-mono text-xs font-bold uppercase tracking-wider text-amber-300">
+              Closed Kaizens Review & Present CFT Member Scoring Matrix ({filteredClosedKaizens.length} Items)
+            </h3>
+          </div>
+          <span className="text-[11px] font-mono text-slate-400">
+            Ratings: 1 (Minimal) to 5 (Outstanding)
+          </span>
+        </div>
+
+        <div className="overflow-x-auto">
+          <table className="w-full text-xs text-left border-collapse min-w-[1280px]">
+            <thead>
+              <tr className="bg-slate-950 text-slate-300 font-mono text-[11px] uppercase border-b border-slate-800">
+                <th className="p-3.5 border-r border-slate-800 w-[110px]">SR No & Date</th>
+                <th className="p-3.5 border-r border-slate-800 w-[240px]">Kaizen Title & Initiator</th>
+                <th className="p-3.5 border-r border-slate-800 w-[160px]">Department Category</th>
+                <th className="p-3.5 border-r border-slate-800 w-[240px]">Problem & Countermeasure</th>
+                <th className="p-3.5 border-r border-slate-800 w-[110px] text-right">Savings (₹)</th>
+                <th className="p-3.5 border-r border-slate-800 text-center bg-amber-950 text-amber-300 font-bold">
+                  ⭐ Present CFT Member Ratings (1–5 Stars)
+                </th>
+                <th className="p-3.5 w-[120px] text-center bg-slate-900 text-amber-400 font-black">
+                  Cumulative Score
+                </th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-200 font-sans text-slate-800">
+              {filteredClosedKaizens.length === 0 ? (
+                <tr>
+                  <td colSpan={7} className="p-12 text-center text-slate-400 font-medium">
+                    No closed Kaizens match your filter criteria for {selectedMonth} {selectedYear}.
+                  </td>
+                </tr>
+              ) : (
+                filteredClosedKaizens.map((k) => {
+                  const currentCategory = getKaizenCategory(k);
+                  const { totalScore, votesCount } = getCumulativeScore(k.id);
+
+                  return (
+                    <tr key={k.id} className="hover:bg-amber-50/30 transition-colors group">
+                      
+                      {/* SR No */}
+                      <td className="p-3.5 border-r border-slate-200 font-mono">
+                        <span className="font-bold text-slate-900 block">{k.srNo}</span>
+                        <span className="text-[10px] text-slate-400 block mt-0.5">{k.implementedDate || k.closingTargetDate}</span>
+                        <button
+                          type="button"
+                          onClick={() => setInspectKaizen(k)}
+                          className="mt-2 px-2 py-1 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 rounded text-[10px] font-bold transition flex items-center space-x-1 cursor-pointer"
+                        >
+                          <Eye className="w-3 h-3 text-indigo-600" />
+                          <span>Inspect Sheet</span>
+                        </button>
+                      </td>
+
+                      {/* Title & Initiator */}
+                      <td className="p-3.5 border-r border-slate-200 cursor-pointer" onClick={() => setInspectKaizen(k)}>
+                        <h4 className="font-bold text-slate-900 leading-snug group-hover:text-indigo-600 transition">
+                          {k.title}
+                        </h4>
+                        <div className="text-[11px] text-slate-500 mt-1 font-mono">
+                          By: <strong className="text-slate-800">{k.ideaBy}</strong>
+                        </div>
+                        <span className="text-[10px] text-slate-400 font-mono block">
+                          Loc: {k.minifactory} • {k.location}
+                        </span>
+                      </td>
+
+                      {/* Department Dropdown */}
+                      <td className="p-3.5 border-r border-slate-200">
+                        <select
+                          value={currentCategory}
+                          onChange={(e) => setCategoryOverrides({
+                            ...categoryOverrides,
+                            [k.id]: e.target.value as CategoryKey
+                          })}
+                          className="bg-slate-50 border border-slate-300 text-slate-900 text-[11px] font-mono font-bold py-1.5 px-2 rounded-lg focus:outline-none focus:ring-1 focus:ring-amber-500 cursor-pointer w-full"
+                        >
+                          <option value="MF1">MF1 (Vacuum Pump)</option>
+                          <option value="MF2">MF2 (EGR Line)</option>
+                          <option value="MF3">MF3 (BPV Sensors)</option>
+                          <option value="Machining">Machining Dept</option>
+                          <option value="Quality">Quality Dept</option>
+                          <option value="Maintenance">Maintenance Dept</option>
+                        </select>
+                      </td>
+
+                      {/* Problem & Countermeasure */}
+                      <td className="p-3.5 border-r border-slate-200 text-[11px] space-y-1">
+                        <div className="text-slate-600 line-clamp-2">
+                          <span className="font-bold text-red-700 font-mono">Before: </span>
+                          {k.problemBefore}
+                        </div>
+                        <div className="text-slate-800 line-clamp-2 font-medium">
+                          <span className="font-bold text-emerald-700 font-mono">After: </span>
+                          {k.counterMeasureAfter}
+                        </div>
+                      </td>
+
+                      {/* Cost Savings */}
+                      <td className="p-3.5 border-r border-slate-200 text-right font-mono font-bold text-emerald-700 text-xs">
+                        {k.costSave ? formatIndianRupees(k.costSave) : 'N/A'}
+                      </td>
+
+                      {/* CFT Rating Buttons */}
+                      <td className="p-3.5 border-r border-slate-200 bg-amber-50/20">
+                        <div className="flex flex-wrap gap-2 justify-center">
+                          {cftMembers.filter(m => presentMemberIds.includes(m.id)).map(m => {
+                            const currentRating = ratings[m.id]?.[k.id] || 0;
+
+                            return (
+                              <div key={m.id} className="bg-white border border-slate-300 p-1.5 rounded-xl text-center space-y-1 shadow-2xs">
+                                <span className="text-[9px] font-mono font-bold text-slate-600 block truncate max-w-[65px]">
+                                  {m.name.split(' ')[0]}
+                                </span>
+                                <div className="flex items-center justify-center space-x-0.5">
+                                  {[1, 2, 3, 4, 5].map(val => (
+                                    <button
+                                      key={val}
+                                      type="button"
+                                      onClick={() => handleRateKaizen(m.id, k.id, val)}
+                                      className={`w-5 h-5 text-[10px] font-bold font-mono rounded transition flex items-center justify-center cursor-pointer ${
+                                        currentRating === val
+                                          ? 'bg-amber-500 text-slate-950 font-black ring-1 ring-amber-400 scale-110'
+                                          : 'bg-slate-100 hover:bg-amber-100 text-slate-600'
+                                      }`}
+                                    >
+                                      {val}
+                                    </button>
+                                  ))}
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </td>
+
+                      {/* Live Cumulative Score */}
+                      <td className="p-3.5 text-center bg-slate-900 text-white font-mono">
+                        <div className="text-base font-black text-amber-400">{totalScore} pts</div>
+                        <div className="text-[10px] text-slate-400 font-bold">{votesCount} / {presentMemberIds.length} votes</div>
+                      </td>
+
+                    </tr>
+                  );
+                })
+              )}
+            </tbody>
+          </table>
+        </div>
+
+      </div>
+
+      {/* REAL-TIME DEPARTMENT WINNERS PODIUM (ON THE SAME SCREEN!) */}
+      <div className="bg-slate-950 text-white border border-slate-800 rounded-3xl p-6 shadow-xl space-y-4">
+        
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-800 pb-3">
+          <div className="flex items-center space-x-2">
+            <Medal className="w-5 h-5 text-amber-400" />
+            <h2 className="text-lg font-black font-display text-white">
+              Real-time Cumulative Score Winner Podiums ({selectedMonth} {selectedYear})
+            </h2>
+          </div>
+          <span className="text-xs font-mono text-slate-400">
+            Auto-calculated from highest CFT cumulative scores
+          </span>
+        </div>
+
+        {/* Winners Grid */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 pt-2">
+          {CATEGORY_CONFIGS.map((config) => {
+            const categoryKaizens = closedKaizensForMonth.filter(k => getKaizenCategory(k) === config.key);
+
+            // Sort by cumulative score
+            const sortedKaizens = [...categoryKaizens].sort((a, b) => {
+              return getCumulativeScore(b.id).totalScore - getCumulativeScore(a.id).totalScore;
+            });
+
+            const winners = sortedKaizens.slice(0, config.winnerCount);
+
+            return (
+              <div
+                key={config.key}
+                className="bg-slate-900/90 border border-slate-800 rounded-2xl p-5 flex flex-col justify-between space-y-4 relative overflow-hidden"
+              >
+                <div>
+                  <div className="border-b border-slate-800 pb-3 mb-3">
+                    <span className={`px-3 py-1 rounded-xl text-[10px] font-black font-mono uppercase tracking-wider bg-gradient-to-r ${config.badgeBg} shadow-sm inline-block`}>
+                      {config.title}
+                    </span>
+                    <p className="text-[11px] text-slate-400 font-mono mt-1">{config.subtitle}</p>
+                  </div>
+
+                  {winners.length === 0 ? (
+                    <div className="py-8 text-center text-xs text-slate-500 italic font-mono">
+                      No closed Kaizens recorded for {config.title} in {selectedMonth}.
+                    </div>
+                  ) : (
+                    <div className="space-y-4">
+                      {winners.map((w, idx) => {
+                        const { totalScore } = getCumulativeScore(w.id);
+                        const isFirst = idx === 0;
+                        const rankLabel = config.winnerCount > 1
+                          ? (isFirst ? '🥇 Winner #1 (Gold)' : '🥈 Winner #2 (Silver)')
+                          : '🏆 Winner (#1)';
+
+                        return (
+                          <div
+                            key={w.id}
+                            className="bg-slate-950 rounded-xl p-4 border border-slate-800 space-y-2 relative"
+                          >
+                            <div className="flex items-center justify-between">
+                              <span className="text-[10px] font-black font-mono uppercase text-amber-400 bg-amber-500/10 px-2 py-0.5 rounded border border-amber-500/20">
+                                {rankLabel}
+                              </span>
+                              <span className="text-xs font-mono font-black text-emerald-400 bg-emerald-500/10 px-2.5 py-0.5 rounded border border-emerald-500/20">
+                                {totalScore} pts
+                              </span>
+                            </div>
+
+                            <h4 className="text-xs font-bold text-white line-clamp-2 leading-snug font-sans">
+                              [{w.srNo}] {w.title}
+                            </h4>
+
+                            <div className="text-[11px] space-y-1 font-mono text-slate-300 pt-2 border-t border-slate-800/80">
+                              <div className="flex justify-between">
+                                <span className="text-slate-400">Winner Initiator:</span>
+                                <span className="font-bold text-amber-300">{w.ideaBy}</span>
+                              </div>
+                              <div className="flex justify-between">
+                                <span className="text-slate-400">Audited Savings:</span>
+                                <span className="font-bold text-emerald-400">{w.costSave ? formatIndianRupees(w.costSave) : 'N/A'}</span>
+                              </div>
+                            </div>
+
+                            <button
+                              type="button"
+                              onClick={() => setShowCertificateModal({
+                                categoryTitle: config.title,
+                                rankLabel,
+                                kaizenTitle: w.title,
+                                winnerName: w.ideaBy,
+                                minifactory: `${w.minifactory} (${w.location})`,
+                                costSaveText: w.costSave ? `${formatIndianRupees(w.costSave)} / year` : 'Verified Process Improvement',
+                                srNo: w.srNo,
+                                totalScore,
+                                month: selectedMonth,
+                                year: selectedYear
+                              })}
+                              className="mt-2 w-full py-2 bg-amber-500 hover:bg-amber-400 text-slate-950 font-black font-mono text-[10px] uppercase rounded-xl transition flex items-center justify-center space-x-1.5 cursor-pointer shadow-xs"
+                            >
+                              <Award className="w-3.5 h-3.5" />
+                              <span>Print Winner Certificate</span>
+                            </button>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+
+      </div>
+
+      {/* PRINTABLE WINNER CERTIFICATE MODAL */}
+      {showCertificateModal && (
+        <div className="fixed inset-0 bg-slate-900/70 backdrop-blur-xs flex items-center justify-center z-50 p-4 overflow-y-auto">
+          <div className="bg-white rounded-3xl w-full max-w-3xl shadow-2xl border border-slate-200 overflow-hidden flex flex-col my-8">
+            
+            <div className="bg-slate-900 text-white px-6 py-4 flex items-center justify-between border-b border-slate-800 shrink-0 print:hidden">
+              <div className="flex items-center space-x-2">
+                <Award className="w-5 h-5 text-amber-400" />
+                <span className="font-mono text-xs font-bold text-slate-300">PRINTABLE CERTIFICATE OF EXCELLENCE</span>
+              </div>
+              <div className="flex items-center space-x-2">
+                <button
+                  type="button"
+                  onClick={() => window.print()}
+                  className="flex items-center space-x-1.5 px-4 py-2 bg-amber-500 hover:bg-amber-400 text-slate-950 rounded-xl text-xs font-black transition cursor-pointer"
+                >
+                  <Printer className="w-4 h-4" />
+                  <span>Print Certificate</span>
+                </button>
+                <button
+                  onClick={() => setShowCertificateModal(null)}
+                  className="text-slate-400 hover:text-white transition p-1.5 bg-slate-800 rounded-lg"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
             </div>
 
-            <div className="space-y-3 text-xs">
-              <div>
-                <label className="block font-bold text-slate-700 mb-1">Member Name *</label>
-                <input
-                  type="text"
-                  value={newMemberName}
-                  onChange={(e) => setNewMemberName(e.target.value)}
-                  placeholder="e.g., Ramesh Deshmukh"
-                  className="w-full bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 text-slate-900 focus:outline-none focus:ring-1 focus:ring-indigo-500"
-                />
-              </div>
-              <div>
-                <label className="block font-bold text-slate-700 mb-1">Designation / Role</label>
-                <input
-                  type="text"
-                  value={newMemberRole}
-                  onChange={(e) => setNewMemberRole(e.target.value)}
-                  placeholder="e.g., Maintenance Head"
-                  className="w-full bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 text-slate-900 focus:outline-none focus:ring-1 focus:ring-indigo-500"
-                />
+            {/* Certificate Body */}
+            <div className="p-8 bg-amber-50/30 print:p-0">
+              <div className="bg-white border-8 border-amber-600/30 p-10 rounded-2xl shadow-xl text-center space-y-6 relative overflow-hidden print:border-4 print:shadow-none print:rounded-none">
+                
+                <div className="flex justify-between items-center border-b border-slate-200 pb-4 font-mono text-xs">
+                  <span className="font-bold text-slate-600 uppercase">SHOPFLOOR MS • KAIZEN CELL</span>
+                  <span className="font-bold text-amber-600 uppercase">{showCertificateModal.rankLabel}</span>
+                </div>
+
+                <div className="space-y-2 py-4">
+                  <Trophy className="w-16 h-16 text-amber-500 mx-auto" />
+                  <h1 className="text-3xl font-black font-display tracking-wide uppercase text-slate-900">
+                    CERTIFICATE OF EXCELLENCE
+                  </h1>
+                  <p className="text-xs font-mono text-slate-500 uppercase tracking-widest">
+                    In Continuous Improvement & Process Kaizen
+                  </p>
+                </div>
+
+                <div className="space-y-2">
+                  <p className="text-xs text-slate-500 font-serif italic">This official award is proudly presented to</p>
+                  <h2 className="text-2xl font-black text-amber-600 font-mono tracking-tight underline underline-offset-8">
+                    {showCertificateModal.winnerName}
+                  </h2>
+                  <p className="text-xs text-slate-600 font-mono pt-2">
+                    For outstanding Kaizen achievement in <strong className="text-slate-900">{showCertificateModal.categoryTitle}</strong> ({showCertificateModal.minifactory}) during <strong className="text-slate-900">{showCertificateModal.month} {showCertificateModal.year}</strong>.
+                  </p>
+                </div>
+
+                <div className="bg-slate-50 p-4 rounded-xl border border-slate-200 text-left font-mono text-xs space-y-1">
+                  <span className="text-[10px] text-slate-400 uppercase font-bold block">Winning Improvement Title:</span>
+                  <p className="font-bold text-slate-900">[{showCertificateModal.srNo}] {showCertificateModal.kaizenTitle}</p>
+                  <div className="flex justify-between pt-2 border-t border-slate-200 text-[11px]">
+                    <span>Audited Savings: <strong className="text-emerald-700">{showCertificateModal.costSaveText}</strong></span>
+                    <span>CFT Cumulative Score: <strong className="text-amber-600">{showCertificateModal.totalScore} Points</strong></span>
+                  </div>
+                </div>
+
+                <div className="pt-8 grid grid-cols-2 gap-8 text-center font-mono text-xs border-t border-slate-200">
+                  <div>
+                    <div className="h-10 border-b border-slate-400 flex items-end justify-center pb-1">
+                      <span className="font-serif italic text-slate-700">Amit Mehta</span>
+                    </div>
+                    <span className="text-[10px] font-bold text-slate-500 uppercase mt-1 block">CFT Committee Lead</span>
+                  </div>
+
+                  <div>
+                    <div className="h-10 border-b border-slate-400 flex items-end justify-center pb-1">
+                      <span className="font-serif italic text-slate-700">Rajesh Patil</span>
+                    </div>
+                    <span className="text-[10px] font-bold text-slate-500 uppercase mt-1 block">Plant Operations Head</span>
+                  </div>
+                </div>
+
               </div>
             </div>
 
-            <div className="flex items-center justify-end space-x-2 pt-2 border-t border-slate-100">
-              <button
-                type="button"
-                onClick={() => setShowAddMemberModal(false)}
-                className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-bold"
-              >
-                Cancel
-              </button>
-              <button
-                type="button"
-                onClick={handleAddCftMember}
-                className="px-4 py-2 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-xs font-bold font-mono"
-              >
-                Save Member
-              </button>
-            </div>
           </div>
         </div>
       )}
 
-      {/* OFFICIAL AWARD CERTIFICATE LIGHTBOX MODAL */}
-      {showCertificateModal && (
-        <div className="fixed inset-0 bg-slate-950/85 backdrop-blur-md z-[9999] flex items-center justify-center p-4 overflow-y-auto">
-          <div className="bg-white rounded-3xl max-w-2xl w-full p-8 shadow-2xl border-4 border-amber-400 relative space-y-6 my-8 text-slate-900">
-            
-            {/* Close button */}
-            <button
-              onClick={() => setShowCertificateModal(null)}
-              className="absolute top-4 right-4 p-2 bg-slate-100 hover:bg-slate-200 rounded-xl text-slate-600 transition cursor-pointer print:hidden"
-            >
-              <X className="w-5 h-5" />
-            </button>
-
-            {/* Certificate Layout */}
-            <div className="border-2 border-dashed border-amber-300 p-6 rounded-2xl text-center space-y-4 relative bg-amber-50/30">
-              
-              <div className="flex justify-center mb-2">
-                <div className="w-16 h-16 bg-gradient-to-tr from-amber-500 to-yellow-400 rounded-full flex items-center justify-center shadow-lg border-2 border-amber-300">
-                  <Trophy className="w-8 h-8 text-slate-950" />
-                </div>
-              </div>
-
-              <div>
-                <span className="text-[10px] font-black uppercase font-mono tracking-widest text-amber-700 block">
-                  SHOPFLOOR CONTINUOUS IMPROVEMENT EXCELLENCE
-                </span>
-                <h1 className="text-2xl font-black font-display text-slate-950 uppercase tracking-tight mt-1">
-                  OFFICIAL CERTIFICATE OF AWARD
-                </h1>
-                <p className="text-xs text-slate-500 font-mono mt-0.5">
-                  Monthly Cross-Functional Team (CFT) Decision • {selectedMonth}
-                </p>
-              </div>
-
-              <div className="py-3 border-y border-amber-200 space-y-2">
-                <p className="text-xs text-slate-600 italic">
-                  This honor is proudly presented to:
-                </p>
-                <div className="text-xl font-extrabold text-slate-900 font-mono tracking-wide underline decoration-amber-400 decoration-2">
-                  {showCertificateModal.winnerName}
-                </div>
-                <p className="text-xs text-slate-600">
-                  For outstanding performance and shopfloor innovation on project:
-                </p>
-                <div className="text-sm font-bold text-slate-800 font-sans max-w-lg mx-auto bg-white p-2.5 rounded-xl border border-amber-200 shadow-2xs">
-                  [{showCertificateModal.srNo}] {showCertificateModal.title}
-                </div>
-              </div>
-
-              <div className="grid grid-cols-2 gap-4 text-xs font-mono text-left bg-white p-3 rounded-xl border border-slate-200">
-                <div>
-                  <span className="text-[10px] text-slate-400 font-bold block uppercase">Award Position:</span>
-                  <span className="font-bold text-amber-700">
-                    {showCertificateModal.rank === 1 ? '🥇 1st Prize (Gold Award)' : showCertificateModal.rank === 2 ? '🥈 2nd Prize (Silver Award)' : '🥉 3rd Prize (Bronze Award)'}
-                  </span>
-                </div>
-                <div>
-                  <span className="text-[10px] text-slate-400 font-bold block uppercase">Plant / Location:</span>
-                  <span className="font-bold text-slate-800">{showCertificateModal.area}</span>
-                </div>
-                <div>
-                  <span className="text-[10px] text-slate-400 font-bold block uppercase">Module Type:</span>
-                  <span className="font-bold text-indigo-700">{showCertificateModal.type} Module</span>
-                </div>
-                <div>
-                  <span className="text-[10px] text-slate-400 font-bold block uppercase">Verified Savings Impact:</span>
-                  <span className="font-bold text-emerald-700">{showCertificateModal.costSaveText}</span>
-                </div>
-              </div>
-
-              {/* Signatures */}
-              <div className="grid grid-cols-2 gap-8 pt-4 border-t border-slate-200 text-center text-xs font-mono">
-                <div>
-                  <div className="border-b border-slate-400 pb-1 font-bold text-slate-800">
-                    {chairperson}
-                  </div>
-                  <span className="text-[9px] text-slate-400 uppercase font-bold block mt-1">
-                    CFT Committee Lead
-                  </span>
-                </div>
-                <div>
-                  <div className="border-b border-slate-400 pb-1 font-bold text-slate-800">
-                    Rajesh Patil (Steering Head)
-                  </div>
-                  <span className="text-[9px] text-slate-400 uppercase font-bold block mt-1">
-                    Plant Steering Committee
-                  </span>
-                </div>
-              </div>
-
-            </div>
-
-            {/* Print button */}
-            <div className="flex justify-end space-x-2 print:hidden">
-              <button
-                type="button"
-                onClick={() => window.print()}
-                className="px-5 py-2.5 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-xs font-bold font-mono transition flex items-center space-x-2 cursor-pointer shadow-md"
-              >
-                <Printer className="w-4 h-4 text-emerald-400" />
-                <span>Print Award Certificate</span>
+      {/* INSPECT KAIZEN OVERLAY MODAL */}
+      {inspectKaizen && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center z-50 p-4 overflow-y-auto">
+          <div className="bg-white rounded-3xl w-full max-w-4xl shadow-2xl border border-slate-200 overflow-hidden flex flex-col my-8 max-h-[90vh]">
+            <div className="bg-slate-900 text-white px-6 py-4 flex items-center justify-between border-b border-slate-800 shrink-0">
+              <span className="font-mono text-xs font-bold text-slate-300">INSPECT KAIZEN SHEET • ID: {inspectKaizen.srNo}</span>
+              <button onClick={() => setInspectKaizen(null)} className="text-slate-400 hover:text-white p-1">
+                <X className="w-5 h-5" />
               </button>
             </div>
 
+            <div className="p-6 overflow-y-auto space-y-4 font-sans text-xs">
+              <div className="bg-slate-50 p-4 rounded-2xl border border-slate-200 space-y-2">
+                <h3 className="text-base font-black text-slate-900">[{inspectKaizen.srNo}] {inspectKaizen.title}</h3>
+                <p className="font-mono text-slate-600">
+                  Initiator: <strong className="text-slate-900">{inspectKaizen.ideaBy}</strong> | Location: <strong>{inspectKaizen.minifactory} ({inspectKaizen.location})</strong>
+                </p>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="bg-red-50/50 p-4 rounded-2xl border border-red-200 space-y-1">
+                  <span className="font-mono text-red-800 font-bold uppercase text-[10px]">Problem Before:</span>
+                  <p className="text-slate-800 leading-relaxed font-medium">{inspectKaizen.problemBefore}</p>
+                </div>
+
+                <div className="bg-emerald-50/50 p-4 rounded-2xl border border-emerald-200 space-y-1">
+                  <span className="font-mono text-emerald-800 font-bold uppercase text-[10px]">Countermeasure After:</span>
+                  <p className="text-slate-800 leading-relaxed font-medium">{inspectKaizen.counterMeasureAfter}</p>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div className="border border-slate-200 rounded-xl p-2 bg-slate-50">
+                  <span className="text-[10px] font-mono text-slate-400 block mb-1">Photo Before</span>
+                  <img src={inspectKaizen.photoBefore} alt="Before" className="w-full h-36 object-contain rounded" />
+                </div>
+                <div className="border border-slate-200 rounded-xl p-2 bg-slate-50">
+                  <span className="text-[10px] font-mono text-slate-400 block mb-1">Photo After</span>
+                  <img src={inspectKaizen.photoAfter} alt="After" className="w-full h-36 object-contain rounded" />
+                </div>
+              </div>
+
+              <div className="bg-slate-900 text-white p-4 rounded-2xl flex items-center justify-between font-mono">
+                <div>
+                  <span className="text-[10px] text-slate-400 uppercase block">Audited Annual Cost Savings:</span>
+                  <span className="text-lg font-black text-emerald-400">{inspectKaizen.costSave ? formatIndianRupees(inspectKaizen.costSave) : 'N/A'}</span>
+                </div>
+                <div>
+                  <span className="text-[10px] text-slate-400 uppercase block">Status:</span>
+                  <span className="text-sm font-black text-amber-400 uppercase">{inspectKaizen.status}</span>
+                </div>
+              </div>
+            </div>
+
+            <div className="bg-slate-50 px-6 py-4 border-t border-slate-200 flex justify-end shrink-0">
+              <button
+                type="button"
+                onClick={() => setInspectKaizen(null)}
+                className="px-5 py-2.5 bg-slate-900 text-white rounded-xl text-xs font-bold hover:bg-slate-800 transition"
+              >
+                Close Sheet
+              </button>
+            </div>
           </div>
         </div>
       )}

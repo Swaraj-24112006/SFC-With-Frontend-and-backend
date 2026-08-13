@@ -246,17 +246,6 @@ export default function Sidebar({
                   <span>Overview Dashboard</span>
                 </button>
                 <button
-                  onClick={() => selectSubTab('kaizen', 'list')}
-                  className={`w-full flex items-center space-x-2 px-2.5 py-1.5 rounded-lg text-left text-[11px] font-semibold transition ${
-                    activeModule === 'kaizen' && activeTab === 'list'
-                      ? 'text-emerald-400 font-bold bg-slate-900/60'
-                      : 'text-slate-500 hover:text-slate-300 hover:bg-slate-900/30'
-                  }`}
-                >
-                  <ClipboardList className="w-3 h-3 shrink-0" />
-                  <span>Spreadsheet Register</span>
-                </button>
-                <button
                   onClick={() => selectSubTab('kaizen', 'form')}
                   className={`w-full flex items-center space-x-2 px-2.5 py-1.5 rounded-lg text-left text-[11px] font-semibold transition ${
                     activeModule === 'kaizen' && activeTab === 'form'
@@ -281,13 +270,35 @@ export default function Sidebar({
                 <button
                   onClick={() => selectSubTab('cft-awards', '')}
                   className={`w-full flex items-center space-x-2 px-2.5 py-1.5 rounded-lg text-left text-[11px] font-semibold transition ${
-                    activeModule === 'cft-awards'
+                    activeModule === 'cft-awards' || (activeModule === 'kaizen' && activeTab === 'cft-awards')
                       ? 'text-amber-400 font-bold bg-slate-900/60'
                       : 'text-amber-400/80 hover:text-amber-300 hover:bg-slate-900/30'
                   }`}
                 >
                   <Trophy className="w-3 h-3 shrink-0 text-amber-400" />
                   <span>🏆 Monthly Best Awards</span>
+                </button>
+                <button
+                  onClick={() => selectSubTab('kaizen', 'impact-tracker')}
+                  className={`w-full flex items-center space-x-2 px-2.5 py-1.5 rounded-lg text-left text-[11px] font-semibold transition ${
+                    activeModule === 'kaizen' && activeTab === 'impact-tracker'
+                      ? 'text-indigo-400 font-bold bg-slate-900/60'
+                      : 'text-indigo-300/80 hover:text-indigo-200 hover:bg-slate-900/30'
+                  }`}
+                >
+                  <ClipboardList className="w-3 h-3 shrink-0 text-indigo-400" />
+                  <span>🎯 Impact Point & Closure</span>
+                </button>
+                <button
+                  onClick={() => selectSubTab('kaizen', 'list')}
+                  className={`w-full flex items-center space-x-2 px-2.5 py-1.5 rounded-lg text-left text-[11px] font-semibold transition ${
+                    activeModule === 'kaizen' && activeTab === 'list'
+                      ? 'text-emerald-400 font-bold bg-slate-900/60'
+                      : 'text-slate-500 hover:text-slate-300 hover:bg-slate-900/30'
+                  }`}
+                >
+                  <ClipboardList className="w-3 h-3 shrink-0" />
+                  <span>📋 Spreadsheet Register</span>
                 </button>
               </div>
             )}

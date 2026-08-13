@@ -1,3 +1,19 @@
+export interface OpenImpactAction {
+  id: string;
+  kaizenSrNo: string;
+  kaizenTitle: string;
+  department: string;
+  category: 'Man' | 'Machine' | 'Material' | 'Method' | 'Measurement' | 'Safety' | 'Horizontal Deployment';
+  impactDescription: string;
+  assignedOwner: string;
+  targetDate: string;
+  status: 'Open' | 'In Progress' | 'Closed';
+  actionTaken: string;
+  closedDate?: string;
+  verifiedBy?: string;
+  createdAt: string;
+}
+
 export interface ImpactItem {
   required: boolean;
   description?: string;
@@ -65,6 +81,7 @@ export interface Kaizen {
   photoAfter: string;  // Base64 or image URL
   result: string;
   impactAssessment?: KaizenImpactAssessment;
+  cftVotes?: { voterName: string; rank: 1 | 2 | 3 }[];
   createdAt: string;
 }
 

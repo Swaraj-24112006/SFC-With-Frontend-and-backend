@@ -1,8 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { Kaizen } from '../types';
-import { CheckCircle2, AlertCircle, Award, Lightbulb, Save, ShieldAlert, XCircle, FileText, ChevronDown, ChevronRight, ZoomIn, X, Maximize2, PanelLeftClose, PanelLeftOpen, Columns, Compass, ShieldCheck, Users, Settings, Flame } from 'lucide-react';
+import { CheckCircle2, AlertCircle, Award, Lightbulb, Save, ShieldAlert, XCircle, FileText, ChevronDown, ChevronRight, ZoomIn, X, Maximize2, PanelLeftClose, PanelLeftOpen, Columns, Compass, ShieldCheck, Users, Settings, Flame, Search, Filter, Eye, UserCheck, LayoutList, FileSpreadsheet, ArrowUpDown, Calendar, Check, Printer, ChevronLeft, Download, Loader2 } from 'lucide-react';
 import KaizenPresentationMode from './KaizenPresentationMode';
 import KaizenImpactModal from './KaizenImpactModal';
+import PhotoZoomModal from './PhotoZoomModal';
+import { formatIndianRupees } from '../utils';
+import { downloadElementAsPdf, triggerA3Print } from '../utils/pdfExporter';
 
 interface KaizenReviewBoardProps {
   kaizens: Kaizen[];
@@ -10,14 +13,22 @@ interface KaizenReviewBoardProps {
 }
 
 export default function KaizenReviewBoard({ kaizens, onUpdateKaizen }: KaizenReviewBoardProps) {
-  // Filter list of kaizens
+  // Main view mode: 'table' (default) or 'a3' (document layout)
+  const [viewMode, setViewMode] = useState<'table' | 'a3'>('table');
+
+  // Selected kaizen for A3 view or modal inspection
   const [selectedId, setSelectedId] = useState<string>('');
   const [presentingKaizen, setPresentingKaizen] = useState<Kaizen | null>(null);
   
-  // Horizontal layout collapse state
-  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
+  // Filter states
+  const [searchQuery, setSearchQuery] = useState('');
+  const [filterStatus, setFilterStatus] = useState<string>('All');
+  const [filterMonth, setFilterMonth] = useState<string>('All');
+  const [filterMinifactory, setFilterMinifactory] = useState<string>('All');
+  const [filterClassification, setFilterClassification] = useState<string>('All');
 
-  // Collapsible queue states (vertical accordion)
+  // Sidebar collapse in A3 view
+  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   const [isPendingCollapsed, setIsPendingCollapsed] = useState(false);
   const [isReviewedCollapsed, setIsReviewedCollapsed] = useState(false);
 
@@ -28,11 +39,12 @@ export default function KaizenReviewBoard({ kaizens, onUpdateKaizen }: KaizenRev
     title: string;
   } | null>(null);
 
-  // Impact modal state
+  // Modals state
   const [impactModalKaizen, setImpactModalKaizen] = useState<Kaizen | null>(null);
   const [impactModalMode, setImpactModalMode] = useState<'review' | 'closure'>('review');
 
-  // Current editing state for review fields
+  // Review Audit Modal state
+  const [reviewModalKaizen, setReviewModalKaizen] = useState<Kaizen | null>(null);
   const [classification, setClassification] = useState<'Kaizen' | 'Good Point' | 'Pending' | 'None'>('Pending');
   const [status, setStatus] = useState<'Pending' | 'Approved' | 'Good Point' | 'Rejected'>('Pending');
   const [remark, setRemark] = useState('');
@@ -40,25 +52,31 @@ export default function KaizenReviewBoard({ kaizens, onUpdateKaizen }: KaizenRev
   const [approvedBy, setApprovedBy] = useState('Rajesh Patil (Supervisor)');
   const [verifiedBy, setVerifiedBy] = useState('Amit Mehta (Kaizen Lead)');
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
-  
-  // Editable benefits in review (if the committee wants to refine operator assertions)
   const [benefits, setBenefits] = useState({ p: false, q: false, c: false, d: false, s: false, m: false });
 
-  // Update selected Kaizen sheet when selection changes
+  // PDF exporting loader
+  const [isPdfExporting, setIsPdfExporting] = useState(false);
+
+  // Download PDF handler
+  const handleDownloadPdf = async () => {
+    if (!selectedKaizen) return;
+    setIsPdfExporting(true);
+    await downloadElementAsPdf('a3-paper-document', {
+      filename: `Kaizen_A3_Sheet_${selectedKaizen.srNo}.pdf`,
+      orientation: 'landscape',
+      format: 'a3'
+    });
+    setIsPdfExporting(false);
+  };
+
+  // Currently selected Kaizen for A3 view
   const selectedKaizen = kaizens.find(k => k.id === selectedId) || kaizens[0];
 
   useEffect(() => {
     if (selectedKaizen) {
-      setSelectedId(selectedKaizen.id);
-      setClassification(selectedKaizen.classification);
-      setStatus(selectedKaizen.status);
-      setRemark(selectedKaizen.remark || '');
-      setCostSave(selectedKaizen.costSave || 0);
-      setApprovedBy(selectedKaizen.approvedBy || 'Rajesh Patil (Supervisor)');
-      setVerifiedBy(selectedKaizen.verifiedBy || 'Amit Mehta (Kaizen Lead)');
-      setBenefits(selectedKaizen.benefits || { p: false, q: false, c: false, d: false, s: false, m: false });
+      if (!selectedId) setSelectedId(selectedKaizen.id);
     }
-  }, [selectedId, selectedKaizen?.id]);
+  }, [selectedKaizen, selectedId]);
 
   // Handle ESC key to close photo modal
   useEffect(() => {
@@ -71,16 +89,72 @@ export default function KaizenReviewBoard({ kaizens, onUpdateKaizen }: KaizenRev
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, []);
 
-  const handleSaveReview = () => {
-    if (!selectedKaizen) return;
+  // Extract unique months for Month/Year filter dropdown
+  const uniqueMonths = Array.from(new Set(kaizens.map(k => {
+    if (k.month) return k.month;
+    if (k.suggestionDate) {
+      const d = new Date(k.suggestionDate);
+      if (!isNaN(d.getTime())) {
+        return d.toLocaleString('default', { month: 'long', year: 'numeric' });
+      }
+    }
+    return '';
+  }).filter(Boolean)));
+
+  // Extract unique minifactories
+  const uniqueMinifactories = Array.from(new Set(kaizens.map(k => k.minifactory).filter(Boolean)));
+
+  // Filtered Kaizens calculation
+  const filteredKaizens = kaizens.filter(k => {
+    // Search
+    const matchesSearch = searchQuery === '' ||
+      k.srNo.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      k.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      k.ideaBy.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      k.location.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      k.minifactory.toLowerCase().includes(searchQuery.toLowerCase());
+
+    // Status
+    const matchesStatus = filterStatus === 'All' || k.status === filterStatus;
+
+    // Month
+    const kaizenMonth = k.month || '';
+    const kaizenDateStr = k.suggestionDate || '';
+    const matchesMonth = filterMonth === 'All' || 
+      kaizenMonth.toLowerCase().includes(filterMonth.toLowerCase()) || 
+      kaizenDateStr.toLowerCase().includes(filterMonth.toLowerCase());
+
+    // Minifactory
+    const matchesMinifactory = filterMinifactory === 'All' || k.minifactory === filterMinifactory;
+
+    // Classification
+    const matchesClassification = filterClassification === 'All' || k.classification === filterClassification;
+
+    return matchesSearch && matchesStatus && matchesMonth && matchesMinifactory && matchesClassification;
+  });
+
+  // Open Review Audit modal for a specific Kaizen
+  const openReviewModal = (k: Kaizen) => {
+    setReviewModalKaizen(k);
+    setClassification(k.classification || 'Kaizen');
+    setStatus(k.status || 'Approved');
+    setRemark(k.remark || '');
+    setCostSave(k.costSave || 0);
+    setApprovedBy(k.approvedBy || 'Rajesh Patil (Supervisor)');
+    setVerifiedBy(k.verifiedBy || 'Amit Mehta (Kaizen Lead)');
+    setBenefits(k.benefits || { p: false, q: false, c: false, d: false, s: false, m: false });
+    setSuccessMessage(null);
+  };
+
+  const handleSaveReviewModal = () => {
+    if (!reviewModalKaizen) return;
     
-    // Auto-map status: If classification is Kaizen, status is Approved. If classification is Good Point, status can be Good Point or Approved.
     let targetStatus = status;
     if (status === 'Pending' && (classification === 'Kaizen' || classification === 'Good Point')) {
       targetStatus = classification === 'Good Point' ? 'Good Point' : 'Approved';
     }
 
-    onUpdateKaizen(selectedKaizen.id, {
+    onUpdateKaizen(reviewModalKaizen.id, {
       classification,
       status: targetStatus,
       remark,
@@ -90,10 +164,11 @@ export default function KaizenReviewBoard({ kaizens, onUpdateKaizen }: KaizenRev
       benefits
     });
 
-    setSuccessMessage(`Review decision successfully logged for Kaizen ${selectedKaizen.srNo}! Classification: "${classification}".`);
+    setSuccessMessage(`Decision logged for Kaizen ${reviewModalKaizen.srNo}!`);
     setTimeout(() => {
       setSuccessMessage(null);
-    }, 4000);
+      setReviewModalKaizen(null);
+    }, 1200);
   };
 
   if (kaizens.length === 0) {
@@ -106,753 +181,942 @@ export default function KaizenReviewBoard({ kaizens, onUpdateKaizen }: KaizenRev
   }
 
   const pendingList = kaizens.filter(k => k.status === 'Pending');
-  const reviewedList = kaizens.filter(k => k.status !== 'Pending');
+  const approvedList = kaizens.filter(k => k.status === 'Approved' || k.status === 'Good Point');
 
   return (
-    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-5">
       
-      {/* Intro Banner */}
-      <div className="bg-slate-900 text-white p-4 rounded-2xl mb-6 shadow-sm border border-slate-800 flex flex-col md:flex-row md:items-center justify-between gap-3">
+      {/* Intro Header & Banner */}
+      <div className="bg-slate-900 text-white p-4 sm:p-5 rounded-2xl shadow-sm border border-slate-800 flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
-          <h2 className="text-sm font-bold tracking-wide uppercase font-mono flex items-center space-x-2">
-            <span>👥 Kaizen Committee Review</span>
+          <div className="flex items-center space-x-2">
+            <span className="bg-amber-500/20 text-amber-400 border border-amber-500/30 font-mono text-[10px] font-black uppercase px-2 py-0.5 rounded-md">
+              CFT Committee Board
+            </span>
+            <span className="text-xs text-slate-400 font-mono">
+              Total Logged: {kaizens.length}
+            </span>
+          </div>
+          <h2 className="text-base sm:text-lg font-black tracking-wide uppercase font-mono mt-1 text-slate-100 flex items-center space-x-2">
+            <span>👥 Kaizen Committee Review & Audit Portal</span>
           </h2>
-          <p className="text-xs text-slate-400 mt-0.5">
-            Verify PQCDSM metrics, audit savings, and designate Kaizen vs Good Point status.
+          <p className="text-xs text-slate-400 mt-0.5 max-w-2xl">
+            Evaluate PQCDSM metrics, audit cost savings (₹), assign Kaizen vs Good Point status, and execute 5M/Safety impact closures.
           </p>
         </div>
-        <div className="flex items-center space-x-2.5 shrink-0">
+
+        <div className="flex flex-wrap items-center gap-2.5 shrink-0">
+          {/* View Mode Switcher */}
+          <div className="bg-slate-950 p-1 rounded-xl border border-slate-800 flex items-center space-x-1">
+            <button
+              type="button"
+              onClick={() => setViewMode('table')}
+              className={`px-3 py-1.5 rounded-lg text-xs font-bold font-mono transition flex items-center space-x-1.5 cursor-pointer ${
+                viewMode === 'table'
+                  ? 'bg-amber-500 text-slate-950 font-black shadow-sm'
+                  : 'text-slate-400 hover:text-white'
+              }`}
+            >
+              <LayoutList className="w-4 h-4" />
+              <span>Tabular Review</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setViewMode('a3')}
+              className={`px-3 py-1.5 rounded-lg text-xs font-bold font-mono transition flex items-center space-x-1.5 cursor-pointer ${
+                viewMode === 'a3'
+                  ? 'bg-indigo-600 text-white font-bold shadow-sm'
+                  : 'text-slate-400 hover:text-white'
+              }`}
+            >
+              <FileText className="w-4 h-4" />
+              <span>A3 Paper View</span>
+            </button>
+          </div>
+
+          {/* Presentation Mode Button */}
           {selectedKaizen && (
             <button
               type="button"
               onClick={() => setPresentingKaizen(selectedKaizen)}
-              className="px-3.5 py-1.5 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 active:scale-95 text-white text-xs font-bold font-mono rounded-lg transition duration-200 flex items-center space-x-2 border border-emerald-500 shadow-sm cursor-pointer"
+              className="px-3.5 py-2 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 active:scale-95 text-white text-xs font-bold font-mono rounded-xl transition duration-200 flex items-center space-x-1.5 border border-emerald-500 shadow-sm cursor-pointer"
             >
-              <Compass className="w-4 h-4" />
-              <span>🎬 PRESENTATION MODE</span>
+              <Compass className="w-4 h-4 text-emerald-200" />
+              <span>PRESENTATION MODE</span>
             </button>
           )}
 
-          <button
-            type="button"
-            onClick={() => setIsSidebarCollapsed(!isSidebarCollapsed)}
-            className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-500 active:scale-95 text-white text-xs font-bold rounded-lg transition duration-200 flex items-center space-x-1.5 border border-indigo-500 shadow-xs cursor-pointer"
-            title={isSidebarCollapsed ? "Show Queue Sidebar" : "Collapse Sidebar for Full Width View"}
-          >
-            {isSidebarCollapsed ? (
-              <>
-                <PanelLeftOpen className="w-4 h-4" />
-                <span>Show Sidebar</span>
-              </>
-            ) : (
-              <>
-                <PanelLeftClose className="w-4 h-4" />
-                <span>Full View</span>
-              </>
-            )}
-          </button>
-          <div className="flex items-center space-x-1.5 bg-slate-800 px-2.5 py-1.5 rounded-lg border border-slate-700 text-xs font-mono font-medium text-emerald-400">
-            <CheckCircle2 className="w-4 h-4 text-emerald-400" />
+          <div className="flex items-center space-x-1.5 bg-slate-950 px-3 py-2 rounded-xl border border-slate-800 text-xs font-mono font-bold text-amber-400">
+            <CheckCircle2 className="w-4 h-4 text-amber-400" />
             <span>{pendingList.length} PENDING</span>
           </div>
         </div>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-        
-        {/* LEFT COLUMN: Queue of Kaizens */}
-        {!isSidebarCollapsed && (
-          <div className="lg:col-span-4 space-y-4 animate-fade-in">
-            <div className="bg-white border border-slate-200 rounded-xl shadow-xs overflow-hidden">
-              
-              {/* Header (Collapsible) */}
+      {/* FILTER BAR FOR COMMITTEE REVIEW */}
+      <div className="bg-white border border-slate-200 rounded-2xl p-4 shadow-xs space-y-3">
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-3">
+          
+          {/* Search Box */}
+          <div className="relative flex-1">
+            <Search className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
+            <input
+              type="text"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="Filter by SR No, Title, Creator name, Location..."
+              className="w-full bg-slate-50 border border-slate-200 rounded-xl pl-10 pr-4 py-2 text-xs font-medium text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-amber-500/20 focus:border-amber-500 transition"
+            />
+            {searchQuery && (
               <button
                 type="button"
-                onClick={() => setIsPendingCollapsed(!isPendingCollapsed)}
-                className="w-full flex items-center justify-between bg-slate-50 px-4 py-3 border-b border-slate-100 font-bold text-xs text-slate-700 uppercase tracking-wider font-mono hover:bg-slate-100/80 transition cursor-pointer select-none"
+                onClick={() => setSearchQuery('')}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 p-0.5"
               >
-                <div className="flex items-center space-x-2">
-                  <span>📥 Pending Review ({pendingList.length})</span>
-                  {pendingList.length > 0 && (
-                    <span className="w-2 h-2 rounded-full bg-amber-500 animate-pulse" />
-                  )}
-                </div>
-                <div className="p-1 rounded-md text-slate-500 hover:text-slate-800">
-                  {isPendingCollapsed ? (
-                    <ChevronRight className="w-4 h-4" />
-                  ) : (
-                    <ChevronDown className="w-4 h-4" />
-                  )}
-                </div>
+                <X className="w-3.5 h-3.5" />
               </button>
-
-              {/* List */}
-              {!isPendingCollapsed && (
-                <div className="divide-y divide-slate-100 max-h-64 overflow-y-auto animate-fade-in">
-                  {pendingList.length === 0 ? (
-                    <div className="p-4 text-xs text-center text-slate-400 font-medium">
-                      🎉 No pending entries. All caught up!
-                    </div>
-                  ) : (
-                    pendingList.map(k => (
-                      <button
-                        key={k.id}
-                        onClick={() => setSelectedId(k.id)}
-                        className={`w-full text-left p-3.5 block transition-colors ${
-                          selectedId === k.id
-                            ? 'bg-amber-50/50 border-l-4 border-amber-500'
-                            : 'hover:bg-slate-50'
-                        }`}
-                      >
-                        <div className="flex items-center justify-between">
-                          <span className="text-[10px] font-bold text-slate-400 font-mono">{k.srNo}</span>
-                          <span className="text-[9px] font-bold bg-amber-100 text-amber-800 px-1.5 py-0.5 rounded-sm uppercase tracking-wide font-mono">Pending</span>
-                        </div>
-                        <h4 className="text-xs font-bold text-slate-800 mt-1 line-clamp-1">{k.title}</h4>
-                        <p className="text-[11px] text-slate-500 mt-0.5 line-clamp-1 font-sans">{k.ideaBy}</p>
-                      </button>
-                    ))
-                  )}
-                </div>
-              )}
-            </div>
-
-            <div className="bg-white border border-slate-200 rounded-xl shadow-xs overflow-hidden">
-              {/* Reviewed header (Collapsible) */}
-              <button
-                type="button"
-                onClick={() => setIsReviewedCollapsed(!isReviewedCollapsed)}
-                className="w-full flex items-center justify-between bg-slate-50 px-4 py-3 border-b border-slate-100 font-bold text-xs text-slate-700 uppercase tracking-wider font-mono hover:bg-slate-100/80 transition cursor-pointer select-none"
-              >
-                <span>✅ Reviewed / Decisioned ({reviewedList.length})</span>
-                <div className="p-1 rounded-md text-slate-500 hover:text-slate-800">
-                  {isReviewedCollapsed ? (
-                    <ChevronRight className="w-4 h-4" />
-                  ) : (
-                    <ChevronDown className="w-4 h-4" />
-                  )}
-                </div>
-              </button>
-
-              {/* List */}
-              {!isReviewedCollapsed && (
-                <div className="divide-y divide-slate-100 max-h-64 overflow-y-auto animate-fade-in">
-                  {reviewedList.map(k => (
-                    <button
-                      key={k.id}
-                      onClick={() => setSelectedId(k.id)}
-                      className={`w-full text-left p-3 text-xs block transition-colors ${
-                        selectedId === k.id
-                          ? 'bg-slate-100 border-l-4 border-slate-800'
-                          : 'hover:bg-slate-50'
-                      }`}
-                    >
-                      <div className="flex items-center justify-between mb-1">
-                        <span className="text-[9px] font-bold text-slate-400 font-mono">{k.srNo}</span>
-                        <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded-sm uppercase font-mono ${
-                          k.classification === 'Kaizen'
-                            ? 'bg-emerald-100 text-emerald-800'
-                            : k.classification === 'Good Point'
-                            ? 'bg-amber-100 text-amber-800'
-                            : 'bg-red-100 text-red-800'
-                        }`}>
-                          {k.classification === 'Pending' ? k.status : k.classification}
-                        </span>
-                      </div>
-                      <h4 className="font-bold text-slate-800 truncate">{k.title}</h4>
-                      <div className="text-[10px] text-slate-500 truncate mt-0.5">{k.ideaBy}</div>
-                    </button>
-                  ))}
-                </div>
-              )}
-            </div>
-          </div>
-        )}
-
-        {/* RIGHT COLUMN: Interactive Document Board */}
-        {selectedKaizen && (
-          <div className={`${isSidebarCollapsed ? 'lg:col-span-12' : 'lg:col-span-8'} space-y-6 transition-all duration-300`}>
-            
-            {/* Full view mode status bar when sidebar is collapsed */}
-            {isSidebarCollapsed && (
-              <div className="flex items-center justify-between bg-indigo-50 border border-indigo-200 p-3 rounded-2xl text-xs text-indigo-900 font-medium shadow-xs">
-                <div className="flex items-center space-x-2.5">
-                  <span className="bg-indigo-600 text-white font-mono font-black text-[10px] px-2 py-0.5 rounded-md uppercase tracking-wider">
-                    Full View Active
-                  </span>
-                  <span className="font-sans">
-                    Queue sidebar is hidden horizontally so your team can view the complete Kaizen sheet and photos in full width.
-                  </span>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => setIsSidebarCollapsed(false)}
-                  className="text-indigo-700 hover:text-indigo-950 font-bold underline font-mono flex items-center space-x-1.5 shrink-0 ml-2 cursor-pointer"
-                >
-                  <PanelLeftOpen className="w-4 h-4" />
-                  <span>Restore Sidebar Queue</span>
-                </button>
-              </div>
             )}
+          </div>
+
+          {/* Filters Row */}
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
             
-            {/* Kaizen Sheet Preview (Attachment 1 paper layout replication) */}
-            <div className="bg-white border border-slate-300 rounded-2xl shadow-sm overflow-hidden relative">
-              <div className="absolute top-0 right-0 p-3 flex items-center space-x-2">
-                <button
-                  type="button"
-                  onClick={() => setPresentingKaizen(selectedKaizen)}
-                  className="px-2.5 py-1 bg-emerald-600 hover:bg-emerald-500 text-white font-mono font-bold text-[10px] rounded-md uppercase tracking-wider transition flex items-center space-x-1 cursor-pointer"
-                >
-                  <Compass className="w-3 h-3" />
-                  <span>Present Kaizen</span>
-                </button>
-                <span className="text-[9px] font-mono font-bold text-slate-400 select-none uppercase hidden sm:inline">Sheet replica</span>
-              </div>
-
-              {/* SHEET TITLE HEADER */}
-              <div className="border-b border-slate-300 bg-white p-4 text-center">
-                <h1 className="text-xl font-extrabold tracking-wider text-slate-900 border-b border-slate-150 pb-1 uppercase font-mono">
-                  KAIZEN SHEET
-                </h1>
-                <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest font-mono mt-1">
-                  (Continuous Improvement Form)
-                </p>
-              </div>
-
-              {/* SHEET META TABLE GRID */}
-              <div className="grid grid-cols-1 md:grid-cols-4 border-b border-slate-300 text-[11px] font-mono">
-                <div className="border-r border-b md:border-b-0 border-slate-300 p-2">
-                  <span className="text-slate-500 block uppercase font-bold text-[9px]">Created by:</span>
-                  <span className="font-bold text-slate-800 truncate block">{selectedKaizen.ideaBy}</span>
-                </div>
-                <div className="border-r border-b md:border-b-0 border-slate-300 p-2">
-                  <span className="text-slate-500 block uppercase font-bold text-[9px]">Approved by:</span>
-                  <span className="font-bold text-slate-800 truncate block">{selectedKaizen.approvedBy || "NOT DECIDED YET"}</span>
-                </div>
-                <div className="border-r border-slate-300 p-2">
-                  <span className="text-slate-500 block uppercase font-bold text-[9px]">Document ID:</span>
-                  <span className="font-black text-slate-900 block">{selectedKaizen.srNo}</span>
-                </div>
-                <div className="p-2">
-                  <span className="text-slate-500 block uppercase font-bold text-[9px]">Version - Status:</span>
-                  <span className={`font-bold block uppercase ${selectedKaizen.status === 'Pending' ? 'text-amber-600' : 'text-emerald-600'}`}>
-                    V1.0 - {selectedKaizen.status}
-                  </span>
-                </div>
-              </div>
-
-              {/* CENTRAL SHEET DETAILS - Problem vs Counter Measure */}
-              <div className="grid grid-cols-1 md:grid-cols-12 border-b border-slate-300">
-                
-                {/* Problem Section */}
-                <div className="md:col-span-5 border-r border-slate-300 p-4 space-y-2">
-                  <h3 className="text-xs font-bold text-red-800 border-b border-red-100 pb-1 uppercase font-mono">
-                    Problem/Before Status :
-                  </h3>
-                  <p className="text-xs text-slate-700 leading-relaxed min-h-24 whitespace-pre-line font-medium">
-                    {selectedKaizen.problemBefore}
-                  </p>
-                </div>
-
-                {/* Counter Measure Section */}
-                <div className="md:col-span-4 border-r border-slate-300 p-4 space-y-2 bg-slate-50/40">
-                  <h3 className="text-xs font-bold text-emerald-800 border-b border-emerald-100 pb-1 uppercase font-mono">
-                    Counter Measure/After Improvement :
-                  </h3>
-                  <p className="text-xs text-slate-700 leading-relaxed min-h-24 whitespace-pre-line font-medium">
-                    {selectedKaizen.counterMeasureAfter}
-                  </p>
-                </div>
-
-                {/* Machinery Metadata Section */}
-                <div className="md:col-span-3 p-3 bg-slate-50 text-[10px] space-y-2 font-mono">
-                  <h4 className="font-bold border-b border-slate-200 pb-1 text-[11px] text-slate-600 uppercase">
-                    Area of Implementation:
-                  </h4>
-                  <div>
-                    <span className="text-slate-400 uppercase font-bold block">Minifactory:</span>
-                    <span className="text-slate-900 font-bold">{selectedKaizen.minifactory}</span>
-                  </div>
-                  <div>
-                    <span className="text-slate-400 uppercase font-bold block">Location:</span>
-                    <span className="text-slate-800 font-bold">{selectedKaizen.location}</span>
-                  </div>
-                  <div>
-                    <span className="text-slate-400 uppercase font-bold block">Machine/Station:</span>
-                    <span className="text-slate-800 font-bold">{selectedKaizen.machine}</span>
-                  </div>
-                </div>
-
-              </div>
-
-              {/* PHOTOS PROOF BLOCKS REPLICA (Clickable for full view lightbox) */}
-              <div className="grid grid-cols-1 md:grid-cols-12 border-b border-slate-300">
-                <div className="md:col-span-5 border-r border-slate-300 p-3">
-                  <div className="flex items-center justify-between mb-2">
-                    <h4 className="text-[10px] font-bold text-slate-500 uppercase font-mono">Photos : BEFORE STATUS</h4>
-                    <span className="text-[9px] font-bold text-indigo-600 font-mono flex items-center space-x-1">
-                      <ZoomIn className="w-3 h-3" />
-                      <span>Click to enlarge</span>
-                    </span>
-                  </div>
-                  <div
-                    onClick={() => setFullViewPhoto({
-                      type: 'before',
-                      url: selectedKaizen.photoBefore,
-                      title: 'Before Improvement Status'
-                    })}
-                    className="bg-slate-50 rounded-lg aspect-video flex items-center justify-center p-1 border border-slate-200 overflow-hidden cursor-pointer group relative hover:border-indigo-400 hover:shadow-md transition"
-                  >
-                    <img
-                      src={selectedKaizen.photoBefore}
-                      alt="Before"
-                      className="max-h-full max-w-full object-contain group-hover:scale-105 transition-transform duration-200"
-                      referrerPolicy="no-referrer"
-                    />
-                    <div className="absolute inset-0 bg-slate-950/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-white text-xs font-bold font-mono space-x-1.5 backdrop-blur-[1px]">
-                      <Maximize2 className="w-4 h-4 text-white" />
-                      <span>Full View Photo</span>
-                    </div>
-                  </div>
-                </div>
-
-                <div className="md:col-span-4 border-r border-slate-300 p-3">
-                  <div className="flex items-center justify-between mb-2">
-                    <h4 className="text-[10px] font-bold text-slate-500 uppercase font-mono">Photos : AFTER IMPROVEMENT</h4>
-                    <span className="text-[9px] font-bold text-indigo-600 font-mono flex items-center space-x-1">
-                      <ZoomIn className="w-3 h-3" />
-                      <span>Click to enlarge</span>
-                    </span>
-                  </div>
-                  <div
-                    onClick={() => setFullViewPhoto({
-                      type: 'after',
-                      url: selectedKaizen.photoAfter,
-                      title: 'After Improvement Status'
-                    })}
-                    className="bg-slate-50 rounded-lg aspect-video flex items-center justify-center p-1 border border-slate-200 overflow-hidden cursor-pointer group relative hover:border-emerald-400 hover:shadow-md transition"
-                  >
-                    <img
-                      src={selectedKaizen.photoAfter}
-                      alt="After"
-                      className="max-h-full max-w-full object-contain group-hover:scale-105 transition-transform duration-200"
-                      referrerPolicy="no-referrer"
-                    />
-                    <div className="absolute inset-0 bg-slate-950/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-white text-xs font-bold font-mono space-x-1.5 backdrop-blur-[1px]">
-                      <Maximize2 className="w-4 h-4 text-white" />
-                      <span>Full View Photo</span>
-                    </div>
-                  </div>
-                </div>
-
-                {/* PQCDSM Benefits block */}
-                <div className="md:col-span-3 p-3 bg-slate-50/70 font-mono flex flex-col justify-between">
-                  <div>
-                    <h4 className="text-[11px] font-bold text-slate-600 uppercase border-b border-slate-200 pb-1 mb-2">Benefits Metric :</h4>
-                    <div className="grid grid-cols-6 gap-1 text-center font-bold">
-                      {['p', 'q', 'c', 'd', 's', 'm'].map(key => {
-                        const active = selectedKaizen.benefits?.[key as keyof typeof selectedKaizen.benefits];
-                        return (
-                          <div key={key}>
-                            <div className="text-[9px] uppercase text-slate-400">{key}</div>
-                            <div className={`mt-0.5 border text-xs py-0.5 rounded-sm font-black ${
-                              active
-                                ? 'bg-slate-900 border-slate-900 text-emerald-400'
-                                : 'border-slate-200 text-slate-300 bg-white'
-                            }`}>
-                              {active ? '✓' : '-'}
-                            </div>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  </div>
-
-                  <div className="text-[8px] text-slate-400 leading-tight border-t border-slate-200 pt-1.5 mt-2">
-                    P-Productivity | Q-Quality | C-Cost | D-Delivery | S-Safety | M-Morale
-                  </div>
-                </div>
-              </div>
-
-              {/* Bottom Result Description Replica */}
-              <div className="p-4 bg-slate-50/20 text-xs">
-                <span className="font-bold text-slate-500 uppercase font-mono block mb-1">Result :</span>
-                <p className="text-slate-700 leading-relaxed font-sans font-medium whitespace-pre-line">
-                  {selectedKaizen.result || "No specific outcome summary documented yet."}
-                </p>
-              </div>
-
-              {/* Committee Remarks Log (If existing) */}
-              {selectedKaizen.remark && (
-                <div className="p-3 bg-amber-50 border-t border-slate-300 text-xs">
-                  <span className="font-bold text-amber-800 uppercase font-mono block mb-0.5">Review Committee Remark :</span>
-                  <p className="text-amber-900 italic font-medium">
-                    "{selectedKaizen.remark}"
-                  </p>
-                </div>
-              )}
-
+            {/* Status Filter */}
+            <div className="space-y-1">
+              <label className="text-[10px] font-mono font-bold text-slate-400 uppercase tracking-wider block">
+                Status
+              </label>
+              <select
+                value={filterStatus}
+                onChange={(e) => setFilterStatus(e.target.value)}
+                className="w-full bg-slate-50 border border-slate-200 rounded-xl px-2.5 py-1.5 text-xs font-bold text-slate-700 focus:outline-none focus:border-amber-500"
+              >
+                <option value="All">All Statuses ({kaizens.length})</option>
+                <option value="Pending">⏳ Pending ({pendingList.length})</option>
+                <option value="Approved">✅ Approved ({approvedList.length})</option>
+                <option value="Good Point">💡 Good Point</option>
+                <option value="Rejected">❌ Rejected</option>
+              </select>
             </div>
 
-            {/* COMMITTEE MEETING CONTROL DECISION PANEL */}
-            <div className="bg-slate-50 border border-slate-300 rounded-2xl p-6 shadow-sm space-y-4">
-              <div className="border-b border-slate-200 pb-2 flex items-center space-x-2">
-                <FileText className="w-5 h-5 text-indigo-600" />
-                <h3 className="text-sm font-black text-slate-800 uppercase font-mono">
-                  💬 COMMITTEE DECISION PORTAL (DISCUSSION & VERIFICATION)
-                </h3>
-              </div>
+            {/* Month & Year Filter */}
+            <div className="space-y-1">
+              <label className="text-[10px] font-mono font-bold text-slate-400 uppercase tracking-wider block">
+                Month / Date
+              </label>
+              <select
+                value={filterMonth}
+                onChange={(e) => setFilterMonth(e.target.value)}
+                className="w-full bg-slate-50 border border-slate-200 rounded-xl px-2.5 py-1.5 text-xs font-bold text-slate-700 focus:outline-none focus:border-amber-500"
+              >
+                <option value="All">All Months</option>
+                {uniqueMonths.map(m => (
+                  <option key={m} value={m}>{m}</option>
+                ))}
+              </select>
+            </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                
-                {/* Decision type selection (Kaizen vs Good Point) */}
-                <div className="space-y-3">
-                  <label className="block text-xs font-bold text-slate-700 uppercase tracking-wide">
-                    1. CLASSIFICATION DECISION <span className="text-red-500">*</span>
-                  </label>
-                  <div className="grid grid-cols-2 gap-2">
-                    <button
-                      type="button"
-                      id="decision-kaizen-btn"
-                      onClick={() => {
-                        setClassification('Kaizen');
-                        setStatus('Approved');
-                      }}
-                      className={`flex items-center justify-center space-x-1.5 p-3 rounded-xl border text-xs font-bold transition ${
-                        classification === 'Kaizen'
-                          ? 'bg-emerald-600 text-white border-emerald-600 shadow-md'
-                          : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'
-                      }`}
-                    >
-                      <Award className="w-4 h-4" />
-                      <span>🏆 KAIZEN</span>
-                    </button>
-                    <button
-                      type="button"
-                      id="decision-goodpoint-btn"
-                      onClick={() => {
-                        setClassification('Good Point');
-                        setStatus('Good Point');
-                      }}
-                      className={`flex items-center justify-center space-x-1.5 p-3 rounded-xl border text-xs font-bold transition ${
-                        classification === 'Good Point'
-                          ? 'bg-amber-500 text-white border-amber-500 shadow-md'
-                          : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'
-                      }`}
-                    >
-                      <Lightbulb className="w-4 h-4" />
-                      <span>💡 GOOD POINT</span>
-                    </button>
-                  </div>
+            {/* Minifactory Filter */}
+            <div className="space-y-1">
+              <label className="text-[10px] font-mono font-bold text-slate-400 uppercase tracking-wider block">
+                Minifactory
+              </label>
+              <select
+                value={filterMinifactory}
+                onChange={(e) => setFilterMinifactory(e.target.value)}
+                className="w-full bg-slate-50 border border-slate-200 rounded-xl px-2.5 py-1.5 text-xs font-bold text-slate-700 focus:outline-none focus:border-amber-500"
+              >
+                <option value="All">All Minifactories</option>
+                {uniqueMinifactories.map(mf => (
+                  <option key={mf} value={mf}>{mf}</option>
+                ))}
+              </select>
+            </div>
 
-                  <div className="grid grid-cols-2 gap-2 mt-2">
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setClassification('None');
-                        setStatus('Rejected');
-                      }}
-                      className={`flex items-center justify-center space-x-1.5 p-2 rounded-lg border text-xs font-bold transition ${
-                        status === 'Rejected'
-                          ? 'bg-red-600 text-white border-red-600 shadow-xs'
-                          : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'
-                      }`}
-                    >
-                      <XCircle className="w-3.5 h-3.5" />
-                      <span>Reject/Decline</span>
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setClassification('Pending');
-                        setStatus('Pending');
-                      }}
-                      className={`flex items-center justify-center space-x-1.5 p-2 rounded-lg border text-xs font-bold transition ${
-                        status === 'Pending'
-                          ? 'bg-slate-600 text-white border-slate-600 shadow-xs'
-                          : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'
-                      }`}
-                    >
-                      <AlertCircle className="w-3.5 h-3.5" />
-                      <span>Hold Pending</span>
-                    </button>
-                  </div>
-                </div>
-
-                {/* Savings input and Sign-off */}
-                <div className="space-y-4">
-                  <div>
-                    <label className="block text-xs font-bold text-slate-700 uppercase tracking-wide mb-1">
-                      2. AUDITED SAVINGS VERIFIED (₹ / year)
-                    </label>
-                    <div className="flex rounded-xl shadow-xs">
-                      <span className="inline-flex items-center px-3 rounded-l-xl border border-r-0 border-slate-300 bg-slate-100 text-slate-500 text-xs font-bold font-mono">
-                        ₹
-                      </span>
-                      <input
-                        type="number"
-                        value={costSave}
-                        onChange={(e) => setCostSave(Number(e.target.value))}
-                        className="w-full border border-slate-300 rounded-r-xl px-3 py-2 text-sm font-mono font-bold focus:outline-none focus:ring-1 focus:ring-indigo-500"
-                        placeholder="0"
-                      />
-                    </div>
-                  </div>
-
-                  <div className="grid grid-cols-2 gap-2">
-                    <div>
-                      <label className="block text-[9px] font-bold text-slate-500 uppercase tracking-wider font-mono">Verified Sign-off</label>
-                      <input
-                        type="text"
-                        value={verifiedBy}
-                        onChange={(e) => setVerifiedBy(e.target.value)}
-                        className="w-full bg-white border border-slate-250 rounded-lg p-1 px-2 text-xs focus:outline-none"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-[9px] font-bold text-slate-500 uppercase tracking-wider font-mono">Approved Sign-off</label>
-                      <input
-                        type="text"
-                        value={approvedBy}
-                        onChange={(e) => setApprovedBy(e.target.value)}
-                        className="w-full bg-white border border-slate-250 rounded-lg p-1 px-2 text-xs focus:outline-none"
-                      />
-                    </div>
-                  </div>
-                </div>
-
-              </div>
-
-              {/* Committee Remarks (Appended to spreadsheet columns) */}
-              <div>
-                <label className="block text-xs font-bold text-slate-700 uppercase tracking-wide mb-1">
-                  3. COMMITTEE DISCUSSION REMARKS / COMMENTS
-                </label>
-                <textarea
-                  value={remark}
-                  onChange={(e) => setRemark(e.target.value)}
-                  rows={2}
-                  className="w-full bg-white border border-slate-300 rounded-xl p-3 text-xs focus:outline-none focus:ring-1 focus:ring-indigo-500"
-                  placeholder="e.g., Annual electrical savings verified by Plant HSE team. Recommended as factory standard practice."
-                />
-              </div>
-
-              {/* Editable PQCDSM override during committee discussion */}
-              <div>
-                <span className="block text-xs font-bold text-slate-600 uppercase mb-2">4. Adjust/Verify Benefits (PQCDSM Checklist) :</span>
-                <div className="flex flex-wrap gap-2 text-xs">
-                  {[
-                    { key: 'p', label: 'Productivity' },
-                    { key: 'q', label: 'Quality' },
-                    { key: 'c', label: 'Cost' },
-                    { key: 'd', label: 'Delivery' },
-                    { key: 's', label: 'Safety' },
-                    { key: 'm', label: 'Morale' }
-                  ].map(b => (
-                    <label key={b.key} className="flex items-center space-x-1.5 bg-white border border-slate-250 rounded-lg px-2.5 py-1.5 select-none cursor-pointer hover:bg-slate-50">
-                      <input
-                        type="checkbox"
-                        checked={benefits[b.key as keyof typeof benefits]}
-                        onChange={(e) => setBenefits(prev => ({ ...prev, [b.key]: e.target.checked }))}
-                        className="rounded text-indigo-600"
-                      />
-                      <span className="font-bold text-slate-700 font-mono text-[10px] uppercase">{b.label}</span>
-                    </label>
-                  ))}
-                </div>
-              </div>
-
-              {/* 5. PROCESS & 5M IMPACT ASSESSMENT & RESOURCE ALLOCATION */}
-              <div className="bg-slate-900 text-white rounded-2xl p-4 space-y-3 border border-slate-800">
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                  <div className="space-y-1">
-                    <div className="inline-flex items-center space-x-1.5 text-amber-400 font-mono text-[10px] font-bold uppercase tracking-wider">
-                      <Settings className="w-3.5 h-3.5" />
-                      <span>5. Process & 5M Impact Assessment</span>
-                    </div>
-                    <h4 className="text-xs font-bold text-slate-100">
-                      Evaluate 5M Changes, Safety, PFD & PFMEA Impacts & Allocate Helpers
-                    </h4>
-                    <p className="text-[11px] text-slate-400 font-sans">
-                      Decide required updates for 5M, Safety Risk, PFD, and PFMEA. Default assigned to initiator (<strong>{selectedKaizen.ideaBy}</strong>) or allocate helper resources.
-                    </p>
-                  </div>
-
-                  <div className="flex items-center space-x-2 shrink-0">
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setImpactModalKaizen(selectedKaizen);
-                        setImpactModalMode('review');
-                      }}
-                      className="px-4 py-2.5 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 font-black font-mono text-xs rounded-xl shadow-md transition flex items-center space-x-2 border border-amber-300 cursor-pointer"
-                    >
-                      <ShieldCheck className="w-4 h-4" />
-                      <span>EVALUATE & ALLOCATE IMPACTS</span>
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setImpactModalKaizen(selectedKaizen);
-                        setImpactModalMode('closure');
-                      }}
-                      className="px-3.5 py-2.5 bg-slate-800 hover:bg-slate-700 text-emerald-400 font-bold font-mono text-xs rounded-xl transition flex items-center space-x-1.5 border border-slate-700 cursor-pointer"
-                    >
-                      <Users className="w-4 h-4" />
-                      <span>View Sign-Offs</span>
-                    </button>
-                  </div>
-                </div>
-
-                {/* Summary status pill */}
-                {selectedKaizen.impactAssessment && (
-                  <div className="bg-slate-950/80 rounded-xl p-2.5 border border-slate-800 flex flex-wrap items-center justify-between gap-2 text-[10px] font-mono">
-                    <div className="flex items-center space-x-2">
-                      <span className="text-slate-400">Closure Status:</span>
-                      <span className="text-emerald-400 font-bold uppercase">
-                        {selectedKaizen.impactAssessment.overallClosureStatus || 'Actions Allocated'}
-                      </span>
-                    </div>
-                    <div className="flex items-center space-x-3 text-slate-300">
-                      <span>5M: <strong className={selectedKaizen.impactAssessment.fiveMChange?.required ? 'text-amber-400' : 'text-slate-500'}>{selectedKaizen.impactAssessment.fiveMChange?.required ? (selectedKaizen.impactAssessment.fiveMChange?.status || 'Required') : 'Off'}</strong></span>
-                      <span>Safety: <strong className={selectedKaizen.impactAssessment.safetyImpact?.required ? 'text-emerald-400' : 'text-slate-500'}>{selectedKaizen.impactAssessment.safetyImpact?.required ? (selectedKaizen.impactAssessment.safetyImpact?.status || 'Required') : 'Off'}</strong></span>
-                      <span>PFD: <strong className={selectedKaizen.impactAssessment.pfdUpdate?.required ? 'text-indigo-400' : 'text-slate-500'}>{selectedKaizen.impactAssessment.pfdUpdate?.required ? (selectedKaizen.impactAssessment.pfdUpdate?.status || 'Required') : 'Off'}</strong></span>
-                      <span>PFMEA: <strong className={selectedKaizen.impactAssessment.pfmeaUpdate?.required ? 'text-violet-400' : 'text-slate-500'}>{selectedKaizen.impactAssessment.pfmeaUpdate?.required ? (selectedKaizen.impactAssessment.pfmeaUpdate?.status || 'Required') : 'Off'}</strong></span>
-                    </div>
-                  </div>
-                )}
-              </div>
-
-              {/* Log Decision Button */}
-              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between pt-2 gap-3">
-                {successMessage ? (
-                  <div className="bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs font-bold px-3 py-2 rounded-xl animate-fade-in">
-                    ✓ {successMessage}
-                  </div>
-                ) : (
-                  <div />
-                )}
-                <button
-                  type="button"
-                  onClick={handleSaveReview}
-                  className="flex items-center space-x-2 bg-slate-900 text-white px-6 py-3 rounded-xl text-xs font-bold hover:bg-slate-800 transition shadow-sm self-end"
-                >
-                  <Save className="w-4 h-4 text-emerald-400" />
-                  <span>💾 LOG BOARD DECISION & APPROVE</span>
-                </button>
-              </div>
-
+            {/* Classification Filter */}
+            <div className="space-y-1">
+              <label className="text-[10px] font-mono font-bold text-slate-400 uppercase tracking-wider block">
+                Classification
+              </label>
+              <select
+                value={filterClassification}
+                onChange={(e) => setFilterClassification(e.target.value)}
+                className="w-full bg-slate-50 border border-slate-200 rounded-xl px-2.5 py-1.5 text-xs font-bold text-slate-700 focus:outline-none focus:border-amber-500"
+              >
+                <option value="All">All Classifications</option>
+                <option value="Kaizen">🏆 Kaizen</option>
+                <option value="Good Point">💡 Good Point</option>
+                <option value="Pending">⏳ Pending</option>
+                <option value="None">❌ None / Rejected</option>
+              </select>
             </div>
 
           </div>
-        )}
 
-      </div>
+        </div>
 
-      {/* Full View Lightbox Modal for Before / After Photos */}
-      {fullViewPhoto && selectedKaizen && (
-        <div
-          className="fixed inset-0 z-[9999] bg-slate-950/90 backdrop-blur-md flex flex-col items-center justify-between p-4 sm:p-6 animate-fade-in"
-          onClick={() => setFullViewPhoto(null)}
-        >
-          {/* Lightbox Header */}
-          <div
-            className="w-full max-w-5xl flex items-center justify-between text-white border-b border-slate-800 pb-3.5 shrink-0"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="flex items-center space-x-3">
-              <span className={`px-2.5 py-1 text-[10px] font-black rounded-md font-mono uppercase tracking-wider ${
-                fullViewPhoto.type === 'before'
-                  ? 'bg-red-500/20 text-red-400 border border-red-500/30'
-                  : 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30'
-              }`}>
-                {fullViewPhoto.type === 'before' ? 'BEFORE STATUS PHOTO' : 'AFTER IMPROVEMENT PHOTO'}
-              </span>
-              <div>
-                <h3 className="text-xs sm:text-sm font-bold text-slate-200 font-mono">
-                  [{selectedKaizen.srNo}] {selectedKaizen.title}
-                </h3>
-                <p className="text-[10px] text-slate-400 font-sans mt-0.5">
-                  Minifactory: {selectedKaizen.minifactory} • Station: {selectedKaizen.machine}
-                </p>
-              </div>
-            </div>
+        {/* Filter Indicator */}
+        <div className="flex flex-wrap items-center justify-between gap-2 pt-1 border-t border-slate-100 text-[11px] font-mono text-slate-500">
+          <div>
+            Showing <strong className="text-slate-900">{filteredKaizens.length}</strong> of <strong className="text-slate-900">{kaizens.length}</strong> Kaizens in committee queue
+          </div>
+          {(searchQuery || filterStatus !== 'All' || filterMonth !== 'All' || filterMinifactory !== 'All' || filterClassification !== 'All') && (
             <button
               type="button"
-              onClick={() => setFullViewPhoto(null)}
-              className="p-2 hover:bg-slate-800 rounded-xl text-slate-400 hover:text-white transition cursor-pointer shrink-0"
-              title="Close viewer (Esc)"
+              onClick={() => {
+                setSearchQuery('');
+                setFilterStatus('All');
+                setFilterMonth('All');
+                setFilterMinifactory('All');
+                setFilterClassification('All');
+              }}
+              className="text-amber-600 hover:text-amber-700 font-bold underline cursor-pointer"
             >
-              <X className="w-5 h-5" />
+              Reset All Filters
             </button>
-          </div>
+          )}
+        </div>
+      </div>
 
-          {/* Lightbox Main Image Container */}
-          <div
-            className="flex-1 w-full max-w-5xl my-4 flex items-center justify-center overflow-hidden relative group"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <img
-              src={fullViewPhoto.url}
-              alt={fullViewPhoto.title}
-              className="max-h-[72vh] max-w-full object-contain rounded-2xl shadow-2xl border border-slate-800"
-              referrerPolicy="no-referrer"
-            />
-          </div>
+      {/* VIEW MODE 1: TABULAR FORMAT (DEFAULT) */}
+      {viewMode === 'table' && (
+        <div className="bg-white border border-slate-200 rounded-2xl shadow-sm overflow-hidden animate-fade-in">
+          <div className="overflow-x-auto">
+            <table className="w-full text-xs text-left border-collapse min-w-[1700px]">
+              <thead>
+                <tr className="bg-slate-900 text-white font-mono text-[11px] uppercase tracking-wider">
+                  <th className="p-3 border-r border-slate-800 w-[230px] bg-amber-500 text-slate-950 font-black text-center sticky left-0 z-10 shadow-xs">
+                    ⚡ Committee Review Actions
+                  </th>
+                  <th className="p-3 border-r border-slate-800 w-[110px]">SR No & Month</th>
+                  <th className="p-3 border-r border-slate-800 w-[240px]">Kaizen Title & Initiator</th>
+                  <th className="p-3 border-r border-slate-800 w-[180px]">Location & Station</th>
+                  <th className="p-3 border-r border-slate-800 w-[260px]">Problem / Before Status</th>
+                  <th className="p-3 border-r border-slate-800 w-[260px]">Countermeasure / After</th>
+                  <th className="p-3 border-r border-slate-800 w-[130px] text-center">PQCDSM Benefits</th>
+                  <th className="p-3 border-r border-slate-800 w-[120px] text-right">Audited Savings</th>
+                  <th className="p-3 border-r border-slate-800 w-[120px] text-center">Classification</th>
+                  <th className="p-3 border-r border-slate-800 w-[100px] text-center">Status</th>
+                  <th className="p-3 border-r border-slate-800 w-[160px] text-center">5M & Process Impact</th>
+                  <th className="p-3 w-[150px]">Committee Remark</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-200 font-sans text-slate-700">
+                {filteredKaizens.length === 0 ? (
+                  <tr>
+                    <td colSpan={12} className="p-8 text-center text-slate-400 font-medium">
+                      No matching Kaizen entries found for the current filters.
+                    </td>
+                  </tr>
+                ) : (
+                  filteredKaizens.map(k => (
+                    <tr
+                      key={k.id}
+                      className={`hover:bg-amber-50/30 transition-colors group ${
+                        k.status === 'Pending' ? 'bg-amber-50/10' : ''
+                      }`}
+                    >
+                      {/* Sticky Action Column */}
+                      <td className="p-2 border-r border-slate-200 text-center bg-white group-hover:bg-amber-50/40 sticky left-0 z-10 shadow-xs">
+                        <div className="flex items-center justify-center space-x-1">
+                          
+                          {/* 1. Review & Audit Button (Disabled if already reviewed) */}
+                          {k.status !== 'Pending' ? (
+                            <button
+                              type="button"
+                              disabled
+                              className="px-2.5 py-1.5 bg-slate-100 text-slate-500 rounded-lg text-[10px] font-bold uppercase border border-slate-300 flex items-center space-x-1 cursor-not-allowed opacity-80"
+                              title="Committee Review is completed and decision is locked"
+                            >
+                              <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                              <span>Reviewed</span>
+                            </button>
+                          ) : (
+                            <button
+                              type="button"
+                              onClick={() => openReviewModal(k)}
+                              className="px-2.5 py-1.5 bg-amber-500 hover:bg-amber-400 text-slate-950 rounded-lg text-[10px] font-black uppercase transition flex items-center space-x-1 cursor-pointer border border-amber-300 shadow-2xs"
+                              title="Audit PQCDSM, Cost Savings & Decision"
+                            >
+                              <UserCheck className="w-3.5 h-3.5" />
+                              <span>Review</span>
+                            </button>
+                          )}
 
-          {/* Lightbox Footer & Switchers */}
-          <div
-            className="w-full max-w-5xl flex flex-col sm:flex-row items-center justify-between bg-slate-900/90 border border-slate-800 rounded-2xl p-3 text-xs gap-3 shrink-0"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="text-slate-300 font-sans text-xs truncate max-w-xl">
-              <span className="font-mono font-bold text-[10px] text-slate-400 uppercase mr-1.5">
-                {fullViewPhoto.type === 'before' ? 'Problem:' : 'Counter Measure:'}
-              </span>
-              {fullViewPhoto.type === 'before' ? selectedKaizen.problemBefore : selectedKaizen.counterMeasureAfter}
-            </div>
+                          {/* 2. 5M Impact Button */}
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setImpactModalKaizen(k);
+                              setImpactModalMode('review');
+                            }}
+                            className="px-2 py-1.5 bg-slate-900 hover:bg-slate-800 text-white rounded-lg text-[10px] font-bold transition flex items-center space-x-1 cursor-pointer border border-slate-800"
+                            title="Evaluate 5M, Safety, PFD & PFMEA Impacts"
+                          >
+                            <Settings className="w-3 h-3 text-amber-400" />
+                            <span>5M Impact</span>
+                          </button>
 
-            <div className="flex items-center space-x-2 shrink-0">
-              <button
-                type="button"
-                onClick={() => setFullViewPhoto({
-                  type: 'before',
-                  url: selectedKaizen.photoBefore,
-                  title: 'Before Improvement Status'
-                })}
-                className={`px-3.5 py-2 rounded-xl font-bold font-mono text-[11px] transition flex items-center space-x-1.5 ${
-                  fullViewPhoto.type === 'before'
-                    ? 'bg-red-600 text-white shadow-md'
-                    : 'bg-slate-800 text-slate-300 hover:bg-slate-700'
-                }`}
-              >
-                <span>📷 View Before Photo</span>
-              </button>
-              <button
-                type="button"
-                onClick={() => setFullViewPhoto({
-                  type: 'after',
-                  url: selectedKaizen.photoAfter,
-                  title: 'After Improvement Status'
-                })}
-                className={`px-3.5 py-2 rounded-xl font-bold font-mono text-[11px] transition flex items-center space-x-1.5 ${
-                  fullViewPhoto.type === 'after'
-                    ? 'bg-emerald-600 text-white shadow-md'
-                    : 'bg-slate-800 text-slate-300 hover:bg-slate-700'
-                }`}
-              >
-                <span>✨ View After Photo</span>
-              </button>
-            </div>
+                          {/* 3. Sheet Blowup */}
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setSelectedId(k.id);
+                              setViewMode('a3');
+                            }}
+                            className="p-1.5 bg-indigo-50 text-indigo-700 hover:bg-indigo-100 rounded-lg text-[10px] font-bold transition cursor-pointer border border-indigo-200"
+                            title="Open A3 Sheet Replica View"
+                          >
+                            <FileText className="w-3.5 h-3.5" />
+                          </button>
+
+                          {/* 4. Slides */}
+                          <button
+                            type="button"
+                            onClick={() => setPresentingKaizen(k)}
+                            className="p-1.5 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 rounded-lg text-[10px] font-bold transition cursor-pointer border border-emerald-200"
+                            title="Launch Fullscreen Slides"
+                          >
+                            <Compass className="w-3.5 h-3.5" />
+                          </button>
+
+                        </div>
+                      </td>
+
+                      {/* SR No & Month */}
+                      <td className="p-3 border-r border-slate-200 font-mono">
+                        <span className="font-bold text-slate-900 block">{k.srNo}</span>
+                        <span className="text-[10px] text-slate-400 block">{k.month || k.suggestionDate}</span>
+                      </td>
+
+                      {/* Title & Initiator */}
+                      <td className="p-3 border-r border-slate-200">
+                        <span className="font-bold text-slate-900 block line-clamp-2 leading-snug">{k.title}</span>
+                        <span className="text-[11px] text-slate-500 block mt-0.5 font-medium">Logged by: {k.ideaBy}</span>
+                      </td>
+
+                      {/* Location */}
+                      <td className="p-3 border-r border-slate-200 text-[11px]">
+                        <span className="font-bold text-slate-800 block">{k.minifactory}</span>
+                        <span className="text-slate-500 block">{k.location}</span>
+                        <span className="text-slate-400 block text-[10px] font-mono">{k.machine}</span>
+                      </td>
+
+                      {/* Before Status */}
+                      <td className="p-3 border-r border-slate-200">
+                        <p className="line-clamp-2 text-slate-700 text-[11px] leading-snug">{k.problemBefore}</p>
+                      </td>
+
+                      {/* Countermeasure / After */}
+                      <td className="p-3 border-r border-slate-200">
+                        <p className="line-clamp-2 text-slate-700 text-[11px] leading-snug">{k.counterMeasureAfter}</p>
+                      </td>
+
+                      {/* PQCDSM Benefits */}
+                      <td className="p-3 border-r border-slate-200 text-center font-mono">
+                        <div className="grid grid-cols-6 gap-0.5 max-w-[120px] mx-auto">
+                          {['p', 'q', 'c', 'd', 's', 'm'].map(key => {
+                            const active = k.benefits?.[key as keyof typeof k.benefits];
+                            return (
+                              <div
+                                key={key}
+                                className={`text-[9px] font-black rounded py-0.5 uppercase ${
+                                  active ? 'bg-slate-900 text-emerald-400' : 'bg-slate-100 text-slate-300'
+                                }`}
+                              >
+                                {key}
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </td>
+
+                      {/* Audited Savings */}
+                      <td className="p-3 border-r border-slate-200 text-right font-mono font-extrabold text-emerald-600">
+                        {formatIndianRupees(k.costSave)}
+                      </td>
+
+                      {/* Classification */}
+                      <td className="p-3 border-r border-slate-200 text-center">
+                        <span className={`inline-block px-2 py-0.5 rounded text-[10px] font-extrabold font-mono uppercase ${
+                          k.classification === 'Kaizen'
+                            ? 'bg-emerald-100 text-emerald-800 border border-emerald-300'
+                            : k.classification === 'Good Point'
+                            ? 'bg-amber-100 text-amber-800 border border-amber-300'
+                            : 'bg-slate-100 text-slate-600 border border-slate-200'
+                        }`}>
+                          {k.classification || 'Pending'}
+                        </span>
+                      </td>
+
+                      {/* Status */}
+                      <td className="p-3 border-r border-slate-200 text-center">
+                        <span className={`inline-block px-2 py-0.5 rounded text-[10px] font-extrabold font-mono uppercase ${
+                          k.status === 'Approved'
+                            ? 'bg-emerald-600 text-white'
+                            : k.status === 'Pending'
+                            ? 'bg-amber-500 text-slate-950 font-black'
+                            : k.status === 'Good Point'
+                            ? 'bg-amber-100 text-amber-900 border border-amber-300'
+                            : 'bg-red-600 text-white'
+                        }`}>
+                          {k.status}
+                        </span>
+                      </td>
+
+                      {/* 5M & Process Impact */}
+                      <td className="p-3 border-r border-slate-200 text-center">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setImpactModalKaizen(k);
+                            setImpactModalMode('review');
+                          }}
+                          className={`w-full px-2 py-1 rounded-lg text-[9px] font-mono font-extrabold uppercase transition border flex items-center justify-center space-x-1 cursor-pointer ${
+                            k.impactAssessment?.overallClosureStatus === 'Fully Closed'
+                              ? 'bg-emerald-100 text-emerald-800 border-emerald-300 hover:bg-emerald-200'
+                              : k.impactAssessment?.overallClosureStatus === 'Actions Allocated'
+                              ? 'bg-indigo-100 text-indigo-800 border-indigo-300 hover:bg-indigo-200'
+                              : 'bg-slate-100 text-slate-700 border-slate-200 hover:bg-slate-200'
+                          }`}
+                        >
+                          <ShieldCheck className="w-3 h-3 text-amber-500" />
+                          <span>
+                            {k.impactAssessment?.overallClosureStatus === 'Fully Closed'
+                              ? '✓ Closed'
+                              : k.impactAssessment?.overallClosureStatus || '5M Impact'}
+                          </span>
+                        </button>
+                      </td>
+
+                      {/* Committee Remark */}
+                      <td className="p-3 text-slate-500 italic max-w-[150px] truncate">
+                        {k.remark || '-'}
+                      </td>
+
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
           </div>
         </div>
       )}
 
-      {/* KAIZEN PRESENTATION MODE OVERLAY */}
+      {/* VIEW MODE 2: A3 DOCUMENT PAPER VIEW */}
+      {viewMode === 'a3' && selectedKaizen && (
+        <div className="space-y-4 animate-fade-in font-sans">
+          
+          {/* A3 DEDICATED ACTION BAR */}
+          <div className="bg-slate-900 text-white p-4 rounded-2xl shadow-md border border-slate-800 flex flex-col md:flex-row md:items-center justify-between gap-3 no-print">
+            <div className="flex items-center space-x-3">
+              <button
+                type="button"
+                onClick={() => setViewMode('table')}
+                className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-xl text-xs font-bold font-mono transition flex items-center space-x-1.5 cursor-pointer border border-slate-700"
+              >
+                <ChevronLeft className="w-4 h-4 text-amber-400" />
+                <span>Return to Audit Table</span>
+              </button>
+              <div>
+                <span className="text-[10px] font-mono uppercase font-black text-amber-400 tracking-wider block">
+                  📄 Pure A3 Paper Output View
+                </span>
+                <span className="text-xs sm:text-sm font-bold font-mono text-white">
+                  [{selectedKaizen.srNo}] {selectedKaizen.title}
+                </span>
+              </div>
+            </div>
+
+            {/* Quick Kaizen Selector & Print Button */}
+            <div className="flex flex-wrap items-center gap-2">
+              <div className="flex items-center space-x-1 bg-slate-950 p-1 rounded-xl border border-slate-800">
+                <span className="text-[10px] font-mono text-slate-400 uppercase font-bold px-2">Select:</span>
+                <select
+                  value={selectedId}
+                  onChange={(e) => setSelectedId(e.target.value)}
+                  className="bg-slate-900 text-slate-100 text-xs font-bold font-mono py-1 px-2.5 rounded-lg border border-slate-700 focus:outline-none"
+                >
+                  {kaizens.map(k => (
+                    <option key={k.id} value={k.id}>
+                      {k.srNo} - {k.title.length > 32 ? k.title.substring(0, 32) + '...' : k.title}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Download PDF Button */}
+              <button
+                type="button"
+                disabled={isPdfExporting}
+                onClick={handleDownloadPdf}
+                className="px-4 py-2.5 bg-violet-600 hover:bg-violet-500 active:scale-95 disabled:opacity-50 text-white font-extrabold text-xs rounded-xl shadow-md transition flex items-center space-x-2 font-mono uppercase tracking-wider cursor-pointer border border-violet-400"
+              >
+                {isPdfExporting ? (
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    <span>Generating PDF...</span>
+                  </>
+                ) : (
+                  <>
+                    <Download className="w-4 h-4 text-violet-200" />
+                    <span>Download PDF</span>
+                  </>
+                )}
+              </button>
+
+              {/* Print A3 Sheet Button */}
+              <button
+                type="button"
+                onClick={() => triggerA3Print('a3-paper-document', `Kaizen A3 Sheet - ${selectedKaizen.srNo}`)}
+                className="px-5 py-2.5 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 active:scale-95 text-slate-950 font-black text-xs rounded-xl shadow-md transition flex items-center space-x-2 font-mono uppercase tracking-wider cursor-pointer border border-amber-300"
+              >
+                <Printer className="w-4.5 h-4.5" />
+                <span>PRINT A3 SHEET</span>
+              </button>
+
+              {/* Presentation Mode */}
+              <button
+                type="button"
+                onClick={() => setPresentingKaizen(selectedKaizen)}
+                className="px-4 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs rounded-xl transition flex items-center space-x-1.5 font-mono cursor-pointer shadow-xs"
+              >
+                <Compass className="w-4 h-4 text-emerald-200" />
+                <span>Slides</span>
+              </button>
+            </div>
+          </div>
+
+          {/* THE CLEAN A3 DOCUMENT PAPER SHEET */}
+          <div 
+            id="a3-paper-document" 
+            className="bg-white border-2 border-slate-900 rounded-2xl shadow-xl overflow-hidden p-6 max-w-5xl mx-auto space-y-0 text-slate-900 font-sans"
+          >
+            {/* SHEET TITLE HEADER */}
+            <div className="border-b-2 border-slate-900 bg-white p-4 text-center">
+              <h1 className="text-2xl font-black tracking-widest text-slate-950 border-b border-slate-200 pb-1 uppercase font-mono">
+                KAIZEN SHEET
+              </h1>
+              <p className="text-[11px] font-black text-slate-600 uppercase tracking-widest font-mono mt-1">
+                (CONTINUOUS IMPROVEMENT FORM)
+              </p>
+            </div>
+
+            {/* SHEET META TABLE GRID */}
+            <div className="grid grid-cols-2 md:grid-cols-4 border-b-2 border-slate-900 text-xs font-mono">
+              <div className="border-r border-b md:border-b-0 border-slate-900 p-3">
+                <span className="text-slate-500 block uppercase font-bold text-[9px]">Created by:</span>
+                <span className="font-black text-slate-900 truncate block text-xs">{selectedKaizen.ideaBy}</span>
+              </div>
+              <div className="border-r border-b md:border-b-0 border-slate-900 p-3">
+                <span className="text-slate-500 block uppercase font-bold text-[9px]">Approved by:</span>
+                <span className="font-bold text-slate-800 truncate block text-xs">{selectedKaizen.approvedBy || "NOT DECIDED YET"}</span>
+              </div>
+              <div className="border-r border-slate-900 p-3">
+                <span className="text-slate-500 block uppercase font-bold text-[9px]">Document ID:</span>
+                <span className="font-black text-slate-950 block text-xs">{selectedKaizen.srNo}</span>
+              </div>
+              <div className="p-3 bg-slate-50">
+                <span className="text-slate-500 block uppercase font-bold text-[9px]">Version - Status:</span>
+                <span className={`font-black block uppercase text-xs ${selectedKaizen.status === 'Pending' ? 'text-amber-600' : 'text-emerald-700'}`}>
+                  V1.0 - {selectedKaizen.status}
+                </span>
+              </div>
+            </div>
+
+            {/* TITLE BAR */}
+            <div className="p-4 bg-slate-100 border-b-2 border-slate-900">
+              <span className="text-[10px] font-mono font-bold text-slate-500 uppercase tracking-widest block">Kaizen Theme Title:</span>
+              <h2 className="text-base font-black text-slate-900 font-mono mt-0.5">{selectedKaizen.title}</h2>
+            </div>
+
+            {/* CENTRAL DETAILS */}
+            <div className="grid grid-cols-1 md:grid-cols-12 border-b-2 border-slate-900">
+              <div className="md:col-span-5 border-r-2 border-slate-900 p-4 space-y-2">
+                <h3 className="text-xs font-black text-red-900 border-b border-red-200 pb-1 uppercase font-mono">
+                  Problem / Before Status :
+                </h3>
+                <p className="text-xs text-slate-800 leading-relaxed min-h-28 font-medium whitespace-pre-line bg-red-50/40 p-3 rounded-lg border border-red-100">
+                  {selectedKaizen.problemBefore}
+                </p>
+              </div>
+
+              <div className="md:col-span-4 border-r-2 border-slate-900 p-4 space-y-2 bg-emerald-50/20">
+                <h3 className="text-xs font-black text-emerald-900 border-b border-emerald-200 pb-1 uppercase font-mono">
+                  Counter Measure / After Improvement :
+                </h3>
+                <p className="text-xs text-slate-800 leading-relaxed min-h-28 font-medium whitespace-pre-line bg-emerald-50/60 p-3 rounded-lg border border-emerald-100">
+                  {selectedKaizen.counterMeasureAfter}
+                </p>
+              </div>
+
+              <div className="md:col-span-3 p-3 bg-slate-50 text-[10px] space-y-2.5 font-mono">
+                <h4 className="font-bold border-b border-slate-300 pb-1 text-[11px] text-slate-700 uppercase">
+                  Area of Implementation:
+                </h4>
+                <div>
+                  <span className="text-slate-400 uppercase font-bold block text-[9px]">Minifactory:</span>
+                  <span className="text-slate-900 font-bold text-xs">{selectedKaizen.minifactory}</span>
+                </div>
+                <div>
+                  <span className="text-slate-400 uppercase font-bold block text-[9px]">Location:</span>
+                  <span className="text-slate-800 font-bold">{selectedKaizen.location}</span>
+                </div>
+                <div>
+                  <span className="text-slate-400 uppercase font-bold block text-[9px]">Machine / Station:</span>
+                  <span className="text-slate-800 font-bold">{selectedKaizen.machine}</span>
+                </div>
+              </div>
+            </div>
+
+            {/* PHOTOS */}
+            <div className="grid grid-cols-1 md:grid-cols-12 border-b-2 border-slate-900">
+              
+              {/* Photo Before */}
+              <div className="md:col-span-5 border-r-2 border-slate-900 p-4">
+                <div className="flex items-center justify-between mb-2">
+                  <h4 className="text-[10px] font-black text-red-800 uppercase font-mono">📷 PHOTO : BEFORE IMPROVEMENT</h4>
+                  <span className="text-[9px] text-indigo-600 font-mono font-bold">🔍 Click photo to Zoom</span>
+                </div>
+                <div
+                  onClick={() => setFullViewPhoto({
+                    type: 'before',
+                    url: selectedKaizen.photoBefore,
+                    title: `BEFORE IMPROVEMENT: ${selectedKaizen.title}`
+                  })}
+                  className="bg-slate-50 rounded-xl aspect-video flex items-center justify-center p-1.5 border border-slate-300 overflow-hidden cursor-pointer group relative hover:border-indigo-500 transition shadow-inner"
+                >
+                  {selectedKaizen.photoBefore ? (
+                    <>
+                      <img
+                        src={selectedKaizen.photoBefore}
+                        alt="Before"
+                        className="max-h-full max-w-full object-contain rounded-lg group-hover:scale-102 transition-transform"
+                        referrerPolicy="no-referrer"
+                      />
+                      <div className="absolute inset-0 bg-black/20 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-white font-mono text-xs font-bold space-x-1">
+                        <ZoomIn className="w-4 h-4" />
+                        <span>Enlarge & Zoom Photo</span>
+                      </div>
+                    </>
+                  ) : (
+                    <span className="text-slate-400 text-xs italic font-mono">No photo before recorded</span>
+                  )}
+                </div>
+              </div>
+
+              {/* Photo After */}
+              <div className="md:col-span-4 border-r-2 border-slate-900 p-4">
+                <div className="flex items-center justify-between mb-2">
+                  <h4 className="text-[10px] font-black text-emerald-800 uppercase font-mono">📷 PHOTO : AFTER IMPROVEMENT</h4>
+                  <span className="text-[9px] text-indigo-600 font-mono font-bold">🔍 Click photo to Zoom</span>
+                </div>
+                <div
+                  onClick={() => setFullViewPhoto({
+                    type: 'after',
+                    url: selectedKaizen.photoAfter,
+                    title: `AFTER IMPROVEMENT: ${selectedKaizen.title}`
+                  })}
+                  className="bg-slate-50 rounded-xl aspect-video flex items-center justify-center p-1.5 border border-slate-300 overflow-hidden cursor-pointer group relative hover:border-emerald-500 transition shadow-inner"
+                >
+                  {selectedKaizen.photoAfter ? (
+                    <>
+                      <img
+                        src={selectedKaizen.photoAfter}
+                        alt="After"
+                        className="max-h-full max-w-full object-contain rounded-lg group-hover:scale-102 transition-transform"
+                        referrerPolicy="no-referrer"
+                      />
+                      <div className="absolute inset-0 bg-black/20 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-white font-mono text-xs font-bold space-x-1">
+                        <ZoomIn className="w-4 h-4" />
+                        <span>Enlarge & Zoom Photo</span>
+                      </div>
+                    </>
+                  ) : (
+                    <span className="text-slate-400 text-xs italic font-mono">No photo after recorded</span>
+                  )}
+                </div>
+              </div>
+
+              {/* Benefits Metric */}
+              <div className="md:col-span-3 p-4 bg-slate-50 font-mono flex flex-col justify-between">
+                <div>
+                  <h4 className="text-[11px] font-black text-slate-800 uppercase border-b border-slate-300 pb-1 mb-3">
+                    PQCDSM Benefits Metric:
+                  </h4>
+                  <div className="grid grid-cols-6 gap-1 text-center font-bold">
+                    {(['p', 'q', 'c', 'd', 's', 'm'] as const).map(key => {
+                      const active = selectedKaizen.benefits?.[key];
+                      return (
+                        <div key={key}>
+                          <div className="text-[9px] uppercase text-slate-500">{key}</div>
+                          <div className={`mt-1 border text-xs py-1 rounded font-black ${
+                            active ? 'bg-slate-900 border-slate-900 text-emerald-400' : 'border-slate-300 text-slate-300 bg-white'
+                          }`}>
+                            {active ? '✓' : '-'}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                <div className="mt-4 pt-3 border-t border-slate-200">
+                  <span className="text-[9px] uppercase font-bold text-slate-500 block">Audited Annual Savings:</span>
+                  <span className="text-sm font-black text-emerald-700 font-mono">
+                    {selectedKaizen.costSave ? formatIndianRupees(selectedKaizen.costSave) : '₹ 0 / year'}
+                  </span>
+                </div>
+              </div>
+
+            </div>
+
+            {/* RESULTS & SIGNATURE FOOTER */}
+            <div className="p-4 bg-slate-50 text-xs grid grid-cols-1 md:grid-cols-12 gap-4">
+              <div className="md:col-span-8">
+                <span className="font-black text-slate-800 uppercase font-mono block mb-1">Outcome & Result Summary:</span>
+                <p className="text-slate-800 leading-relaxed font-sans font-medium whitespace-pre-line bg-white p-3 rounded-lg border border-slate-200">
+                  {selectedKaizen.result || "Continuous improvement implemented on shopfloor with verified standards."}
+                </p>
+              </div>
+
+              <div className="md:col-span-4 border-l border-slate-200 pl-4 space-y-2 font-mono text-[11px]">
+                <span className="font-bold text-slate-700 uppercase block border-b border-slate-200 pb-1">Sign-Offs:</span>
+                <div className="flex justify-between">
+                  <span className="text-slate-500">Prepared By:</span>
+                  <span className="font-bold text-slate-900">{selectedKaizen.preparedBy || selectedKaizen.ideaBy}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-slate-500">Approved By:</span>
+                  <span className="font-bold text-slate-900">{selectedKaizen.approvedBy || 'Pending'}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-slate-500">Verified By:</span>
+                  <span className="font-bold text-slate-900">{selectedKaizen.verifiedBy || 'Pending'}</span>
+                </div>
+              </div>
+            </div>
+
+          </div>
+
+          {/* QUICK BUTTON TO OPEN AUDIT MODAL FROM A3 VIEW */}
+          <div className="bg-slate-900 text-white p-5 rounded-2xl flex items-center justify-between no-print max-w-5xl mx-auto border border-slate-800 shadow-md">
+            <div>
+              <h4 className="text-sm font-bold text-slate-100">Committee Review & Audit Status</h4>
+              <p className="text-xs text-slate-400">Classify as Kaizen or Good Point, set cost savings (₹), and log remarks.</p>
+            </div>
+            {selectedKaizen.status !== 'Pending' ? (
+              <div className="px-5 py-2.5 bg-slate-800 text-slate-300 border border-slate-700 font-black rounded-xl text-xs flex items-center space-x-2 font-mono">
+                <CheckCircle2 className="w-4 h-4 text-emerald-400" />
+                <span>REVIEW COMPLETED ({selectedKaizen.status})</span>
+              </div>
+            ) : (
+              <button
+                type="button"
+                onClick={() => openReviewModal(selectedKaizen)}
+                className="px-5 py-2.5 bg-amber-500 text-slate-950 font-black rounded-xl text-xs hover:bg-amber-400 transition cursor-pointer flex items-center space-x-1.5 shadow-md"
+              >
+                <UserCheck className="w-4 h-4" />
+                <span>REVIEW & AUDIT THIS KAIZEN</span>
+              </button>
+            )}
+          </div>
+
+        </div>
+      )}
+
+      {/* COMMITTEE AUDIT MODAL (Opens for Tabular Row or A3 View) */}
+      {reviewModalKaizen && (
+        <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-xs flex items-center justify-center p-4 z-50 animate-fade-in">
+          <div className="bg-slate-900 text-white border border-slate-800 rounded-2xl max-w-xl w-full p-6 shadow-2xl space-y-5 relative max-h-[90vh] overflow-y-auto">
+            <button
+              onClick={() => setReviewModalKaizen(null)}
+              className="absolute top-4 right-4 text-slate-400 hover:text-white p-1 rounded-lg hover:bg-slate-800 transition"
+            >
+              <X className="w-5 h-5" />
+            </button>
+
+            <div className="flex items-center space-x-3">
+              <div className="w-10 h-10 rounded-xl bg-amber-500/20 border border-amber-500/30 flex items-center justify-center text-amber-400">
+                <UserCheck className="w-5 h-5" />
+              </div>
+              <div>
+                <span className="text-[10px] font-mono font-bold text-amber-400 uppercase tracking-widest">
+                  Committee Review & Audit ({reviewModalKaizen.srNo})
+                </span>
+                <h3 className="text-base font-bold text-slate-100 leading-snug">
+                  {reviewModalKaizen.title}
+                </h3>
+              </div>
+            </div>
+
+            <div className="space-y-4 text-xs font-sans">
+              
+              {/* Classification & Status */}
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1">
+                  <label className="text-[11px] font-mono text-slate-400 uppercase font-bold">
+                    Kaizen Classification
+                  </label>
+                  <select
+                    value={classification}
+                    onChange={(e) => setClassification(e.target.value as any)}
+                    className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-xs font-bold text-slate-100"
+                  >
+                    <option value="Kaizen">🏆 Kaizen (High Benefit)</option>
+                    <option value="Good Point">💡 Good Point (Standard)</option>
+                    <option value="Pending">⏳ Pending Review</option>
+                    <option value="None">❌ None / Rejected</option>
+                  </select>
+                </div>
+
+                <div className="space-y-1">
+                  <label className="text-[11px] font-mono text-slate-400 uppercase font-bold">
+                    Approval Status
+                  </label>
+                  <select
+                    value={status}
+                    onChange={(e) => setStatus(e.target.value as any)}
+                    className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-xs font-bold text-slate-100"
+                  >
+                    <option value="Approved">✅ Approved</option>
+                    <option value="Good Point">💡 Good Point</option>
+                    <option value="Pending">⏳ Pending</option>
+                    <option value="Rejected">❌ Rejected</option>
+                  </select>
+                </div>
+              </div>
+
+              {/* Cost Savings */}
+              <div className="space-y-1">
+                <label className="text-[11px] font-mono text-slate-400 uppercase font-bold">
+                  Audited Annual Cost Savings (₹)
+                </label>
+                <input
+                  type="number"
+                  value={costSave}
+                  onChange={(e) => setCostSave(Number(e.target.value))}
+                  className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-xs font-mono font-bold text-emerald-400"
+                  placeholder="e.g. 85000"
+                />
+              </div>
+
+              {/* PQCDSM Benefits checkmarks */}
+              <div className="space-y-1.5">
+                <label className="text-[11px] font-mono text-slate-400 uppercase font-bold">
+                  PQCDSM Benefit Areas
+                </label>
+                <div className="grid grid-cols-6 gap-1.5 font-mono">
+                  {(['p', 'q', 'c', 'd', 's', 'm'] as const).map(key => (
+                    <button
+                      key={key}
+                      type="button"
+                      onClick={() => setBenefits({ ...benefits, [key]: !benefits[key] })}
+                      className={`py-2 rounded-lg text-center font-black uppercase transition border ${
+                        benefits[key]
+                          ? 'bg-emerald-500 text-slate-950 border-emerald-400 shadow-xs'
+                          : 'bg-slate-950 text-slate-500 border-slate-800 hover:border-slate-700'
+                      }`}
+                    >
+                      {key}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Sign-offs */}
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1">
+                  <label className="text-[10px] font-mono text-slate-400 uppercase font-bold">Verified Sign-off</label>
+                  <input
+                    type="text"
+                    value={verifiedBy}
+                    onChange={(e) => setVerifiedBy(e.target.value)}
+                    className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-1.5 text-xs text-slate-200"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <label className="text-[10px] font-mono text-slate-400 uppercase font-bold">Approved Sign-off</label>
+                  <input
+                    type="text"
+                    value={approvedBy}
+                    onChange={(e) => setApprovedBy(e.target.value)}
+                    className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-1.5 text-xs text-slate-200"
+                  />
+                </div>
+              </div>
+
+              {/* Committee Remark */}
+              <div className="space-y-1">
+                <label className="text-[11px] font-mono text-slate-400 uppercase font-bold">
+                  Committee Remark & Guidance
+                </label>
+                <textarea
+                  rows={2}
+                  value={remark}
+                  onChange={(e) => setRemark(e.target.value)}
+                  className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-xs text-slate-200"
+                  placeholder="Enter audit notes or feedback..."
+                />
+              </div>
+
+              {/* 5M & Safety Impact shortcut */}
+              <div className="bg-slate-950 p-3 rounded-xl border border-slate-800 flex items-center justify-between">
+                <div>
+                  <span className="text-slate-300 font-bold block">5M & Safety Impact Assessment</span>
+                  <p className="text-[10px] text-slate-400">Manage 5M changes, Safety, PFD/PFMEA updates & assign helpers.</p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setImpactModalKaizen(reviewModalKaizen);
+                  }}
+                  className="px-3 py-1.5 bg-amber-500 text-slate-950 rounded-lg text-[10px] font-black uppercase hover:bg-amber-400 transition"
+                >
+                  Configure
+                </button>
+              </div>
+
+            </div>
+
+            {/* Action buttons */}
+            <div className="pt-2 flex items-center justify-end space-x-3 border-t border-slate-800">
+              <button
+                type="button"
+                onClick={() => setReviewModalKaizen(null)}
+                className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl text-xs font-bold transition"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleSaveReviewModal}
+                className="px-5 py-2 bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-black rounded-xl text-xs transition flex items-center space-x-1.5 shadow-md cursor-pointer"
+              >
+                <Save className="w-4 h-4" />
+                <span>{successMessage ? '✓ Decision Saved!' : 'Save Decision'}</span>
+              </button>
+            </div>
+
+          </div>
+        </div>
+      )}
+
+      {/* FULL VIEW LIGHTBOX MODAL FOR BEFORE/AFTER PHOTOS */}
+      {fullViewPhoto && (
+        <PhotoZoomModal
+          photoUrl={fullViewPhoto.url}
+          title={fullViewPhoto.title}
+          onClose={() => setFullViewPhoto(null)}
+        />
+      )}
+
+      {/* PRESENTATION MODE OVERLAY */}
       {presentingKaizen && (
         <KaizenPresentationMode
           kaizen={presentingKaizen}
-          allKaizens={kaizens}
+          allKaizens={filteredKaizens}
           onClose={() => setPresentingKaizen(null)}
           onUpdateKaizen={onUpdateKaizen}
           onSelectKaizen={(id) => {
@@ -865,7 +1129,7 @@ export default function KaizenReviewBoard({ kaizens, onUpdateKaizen }: KaizenRev
         />
       )}
 
-      {/* KAIZEN PROCESS & 5M IMPACT CLOSURE & RESOURCE ALLOCATION MODAL */}
+      {/* 5M IMPACT MODAL */}
       {impactModalKaizen && (
         <KaizenImpactModal
           kaizen={impactModalKaizen}
@@ -878,3 +1142,4 @@ export default function KaizenReviewBoard({ kaizens, onUpdateKaizen }: KaizenRev
     </div>
   );
 }
+

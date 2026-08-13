@@ -19,9 +19,14 @@ import {
   UserCheck,
   Building,
   Wrench,
-  Sparkles
+  Sparkles,
+  Download,
+  Printer,
+  Loader2
 } from 'lucide-react';
 import { formatIndianRupees } from '../utils';
+import PhotoZoomModal from './PhotoZoomModal';
+import { downloadElementAsPdf, triggerA3Print } from '../utils/pdfExporter';
 
 interface KaizenPresentationModeProps {
   kaizen: Kaizen;
@@ -60,6 +65,17 @@ export default function KaizenPresentationMode({
 
   // Zoom photo modal state
   const [zoomedPhoto, setZoomedPhoto] = useState<{ url: string; title: string } | null>(null);
+  const [isPdfExporting, setIsPdfExporting] = useState(false);
+
+  const handleDownloadPdf = async () => {
+    setIsPdfExporting(true);
+    await downloadElementAsPdf('kaizen-presentation-slide', {
+      filename: `Kaizen_${kaizen.srNo}_Slide_${currentStep}.pdf`,
+      orientation: 'landscape',
+      format: 'a3'
+    });
+    setIsPdfExporting(false);
+  };
 
   // Sync state when props change
   useEffect(() => {
@@ -380,31 +396,59 @@ export default function KaizenPresentationMode({
           </div>
 
           {/* Navigation Controls */}
-          <div className="flex items-center space-x-3 shrink-0">
+          <div className="flex items-center space-x-2 shrink-0">
+            <button
+              type="button"
+              disabled={isPdfExporting}
+              onClick={handleDownloadPdf}
+              className="px-3 py-2 bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white rounded-xl text-xs font-extrabold uppercase tracking-wider font-mono shadow-md cursor-pointer transition flex items-center space-x-1.5"
+            >
+              {isPdfExporting ? (
+                <>
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  <span>PDF...</span>
+                </>
+              ) : (
+                <>
+                  <Download className="w-4 h-4" />
+                  <span>Download PDF</span>
+                </>
+              )}
+            </button>
+
+            <button
+              type="button"
+              onClick={() => triggerA3Print('kaizen-presentation-slide', `Kaizen Slide - ${kaizen.srNo}`)}
+              className="px-3 py-2 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-xs font-extrabold uppercase tracking-wider font-mono shadow-md cursor-pointer transition flex items-center space-x-1.5"
+            >
+              <Printer className="w-4 h-4 text-amber-400" />
+              <span>Print A3</span>
+            </button>
+
             <button
               type="button"
               disabled={currentStep === 1}
               onClick={() => setCurrentStep(prev => Math.max(1, prev - 1))}
-              className="px-4 py-2 bg-white hover:bg-slate-100 active:scale-95 disabled:opacity-40 rounded-xl text-slate-800 border border-slate-300 font-bold text-sm transition cursor-pointer flex items-center space-x-2 shadow-xs"
+              className="px-3 py-2 bg-white hover:bg-slate-100 active:scale-95 disabled:opacity-40 rounded-xl text-slate-800 border border-slate-300 font-bold text-xs transition cursor-pointer flex items-center space-x-1 shadow-xs"
             >
-              <ChevronLeft className="w-5 h-5 text-indigo-600" />
-              <span>Previous</span>
+              <ChevronLeft className="w-4 h-4 text-indigo-600" />
+              <span>Prev</span>
             </button>
 
             <button
               type="button"
               disabled={currentStep === 4}
               onClick={() => setCurrentStep(prev => Math.min(4, prev + 1))}
-              className="px-5 py-2 bg-indigo-600 hover:bg-indigo-700 active:scale-95 disabled:opacity-40 rounded-xl text-white font-black text-sm transition cursor-pointer flex items-center space-x-2 shadow-md shadow-indigo-200"
+              className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 active:scale-95 disabled:opacity-40 rounded-xl text-white font-black text-xs transition cursor-pointer flex items-center space-x-1 shadow-md shadow-indigo-200"
             >
               <span>Next</span>
-              <ChevronRight className="w-5 h-5 text-white" />
+              <ChevronRight className="w-4 h-4 text-white" />
             </button>
           </div>
         </div>
 
         {/* SLIDE CANVAS BODY */}
-        <div className="flex-1 overflow-y-auto p-6 sm:p-8 space-y-6">
+        <div id="kaizen-presentation-slide" className="flex-1 overflow-y-auto p-6 sm:p-8 space-y-6">
           
           {/* SLIDE 1: PROBLEM & BEFORE STATE */}
           {currentStep === 1 && (
@@ -469,9 +513,18 @@ export default function KaizenPresentationMode({
                     )}
                   </div>
 
-                  <div className="bg-slate-50 p-2 rounded-xl border border-slate-200 aspect-video flex items-center justify-center overflow-hidden">
+                  <div 
+                    onClick={() => kaizen.photoBefore && setZoomedPhoto({ url: kaizen.photoBefore, title: `BEFORE IMPROVEMENT: ${kaizen.title}` })}
+                    className="bg-slate-50 p-2 rounded-xl border border-slate-200 aspect-video flex items-center justify-center overflow-hidden cursor-pointer group relative hover:border-indigo-400 transition"
+                  >
                     {kaizen.photoBefore ? (
-                      <img src={kaizen.photoBefore} alt="Photo Before" className="max-h-full max-w-full object-contain rounded-lg" referrerPolicy="no-referrer" />
+                      <>
+                        <img src={kaizen.photoBefore} alt="Photo Before" className="max-h-full max-w-full object-contain rounded-lg group-hover:scale-102 transition-transform" referrerPolicy="no-referrer" />
+                        <div className="absolute inset-0 bg-black/20 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-white font-mono text-xs font-bold space-x-1">
+                          <ZoomIn className="w-4 h-4" />
+                          <span>Click to Zoom High-Res</span>
+                        </div>
+                      </>
                     ) : (
                       <span className="text-slate-400 text-sm italic">No photo before uploaded</span>
                     )}
@@ -530,9 +583,18 @@ export default function KaizenPresentationMode({
                     )}
                   </div>
 
-                  <div className="bg-slate-50 p-2 rounded-xl border border-slate-200 aspect-video flex items-center justify-center overflow-hidden">
+                  <div 
+                    onClick={() => kaizen.photoAfter && setZoomedPhoto({ url: kaizen.photoAfter, title: `AFTER IMPROVEMENT: ${kaizen.title}` })}
+                    className="bg-slate-50 p-2 rounded-xl border border-slate-200 aspect-video flex items-center justify-center overflow-hidden cursor-pointer group relative hover:border-emerald-400 transition"
+                  >
                     {kaizen.photoAfter ? (
-                      <img src={kaizen.photoAfter} alt="Photo After" className="max-h-full max-w-full object-contain rounded-lg" referrerPolicy="no-referrer" />
+                      <>
+                        <img src={kaizen.photoAfter} alt="Photo After" className="max-h-full max-w-full object-contain rounded-lg group-hover:scale-102 transition-transform" referrerPolicy="no-referrer" />
+                        <div className="absolute inset-0 bg-black/20 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-white font-mono text-xs font-bold space-x-1">
+                          <ZoomIn className="w-4 h-4" />
+                          <span>Click to Zoom High-Res</span>
+                        </div>
+                      </>
                     ) : (
                       <span className="text-slate-400 text-sm italic">No photo after uploaded</span>
                     )}
@@ -794,21 +856,12 @@ export default function KaizenPresentationMode({
 
       {/* PHOTO ZOOM MODAL OVERLAY */}
       {zoomedPhoto && (
-        <div className="fixed inset-0 bg-black/90 z-[10000] p-6 flex flex-col items-center justify-center animate-fade-in">
-          <div className="w-full max-w-4xl flex items-center justify-between text-white mb-4">
-            <h3 className="text-base font-bold font-mono">{zoomedPhoto.title}</h3>
-            <button
-              type="button"
-              onClick={() => setZoomedPhoto(null)}
-              className="p-2 bg-white/10 hover:bg-white/20 rounded-xl transition cursor-pointer"
-            >
-              <X className="w-6 h-6 text-white" />
-            </button>
-          </div>
-          <div className="max-w-4xl max-h-[80vh] overflow-hidden flex items-center justify-center bg-black/50 rounded-2xl p-2 border border-white/20">
-            <img src={zoomedPhoto.url} alt="Zoomed" className="max-h-[75vh] max-w-full object-contain rounded-lg" referrerPolicy="no-referrer" />
-          </div>
-        </div>
+        <PhotoZoomModal
+          photoUrl={zoomedPhoto.url}
+          title={zoomedPhoto.title}
+          subtitle={`Kaizen ID: ${kaizen.srNo}`}
+          onClose={() => setZoomedPhoto(null)}
+        />
       )}
 
     </div>

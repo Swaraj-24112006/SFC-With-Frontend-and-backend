@@ -218,28 +218,28 @@ let kaizens: Kaizen[] = [
     srNo: "KZ-2026-005",
     month: "July",
     suggestionDate: "2026-07-11",
-    title: "Conduit Routing for Oil Pump Packing Station",
-    problemBefore: "Oil Pump barcode scanners, sensor leads, and custom packaging conveyor electrical cables are hanging loose beneath the main packing station table, creating trip hazards for workers and tension strain on ports.",
-    counterMeasureAfter: "Gathered loose power cables of the Oil Pump shipping line into high-durability plastic corrugated conduits. Attached them to the underside of the table with heavy-duty adhesive cable tie mounts and Velcro strips.",
-    area: "Oil Pump Packaging Area",
-    minifactory: "MF1",
+    title: "Conduit Routing & Cable Protection for Oil Pump Line",
+    problemBefore: "Oil Pump barcode scanners, sensor leads, and custom packaging conveyor electrical cables were hanging loose beneath the main packing station table, creating trip hazards for workers and tension strain on ports.",
+    counterMeasureAfter: "Gathered loose power cables into high-durability plastic corrugated conduits. Attached them to the underside of table with heavy-duty adhesive cable tie mounts and Velcro strips.",
+    area: "Maintenance & Utilities",
+    minifactory: "Maintenance",
     location: "Table 4 South - Bengaluru",
     machine: "Oil Pump Pack Station 04",
     closingTargetDate: "2026-07-16",
     implementedDate: "2026-07-13",
-    costSave: 0,
-    benefits: { p: false, q: false, c: false, d: false, s: true, m: false },
-    ideaBy: "Priya Sharma (Packaging Associate)",
-    implementedBy: "Priya Sharma",
-    preparedBy: "Priya Sharma",
-    approvedBy: "",
-    verifiedBy: "",
-    status: "Pending",
-    classification: "Pending",
-    remark: "",
+    costSave: 60000,
+    benefits: { p: false, q: false, c: false, d: false, s: true, m: true },
+    ideaBy: "Vijay Deshmukh (Maintenance Tech)",
+    implementedBy: "Vijay Deshmukh",
+    preparedBy: "Vijay Deshmukh",
+    approvedBy: "Amit Mehta (Kaizen Lead)",
+    verifiedBy: "Amit Mehta (Kaizen Lead)",
+    status: "Approved",
+    classification: "Kaizen",
+    remark: "Clean cable management eliminated electrical trips and socket strain.",
     photoBefore: svgBeforeGeneric,
     photoAfter: svgAfterGeneric,
-    result: "All loose wires are neatly gathered and mounted off the ground. Zero clutter visible under workstation.",
+    result: "All loose wires gathered neatly. Zero clutter under workstation.",
     createdAt: "2026-07-11T11:20:00.000Z"
   },
   {
@@ -248,7 +248,7 @@ let kaizens: Kaizen[] = [
     month: "July",
     suggestionDate: "2026-07-12",
     title: "Semi-Circular Strike Zone Layout for EGR Fastener Bins",
-    problemBefore: "Fastener trays containing small washers and M5/M6 screws for EGR assembly are arranged linearly. Operators must stretch their arms up to 75cm repeatedly, causing fatigue and slowing EGR pick cycle times.",
+    problemBefore: "Fastener trays containing small washers and M5/M6 screws for EGR assembly were arranged linearly. Operators stretch arms up to 75cm repeatedly, causing fatigue and slowing EGR pick cycle times.",
     counterMeasureAfter: "Re-arranged EGR bin positions into a semi-circular, tiered ergonomic arc (strike-zone) based on pick frequency. Heavy fasteners placed at front center; rare fasteners placed at outer sides.",
     area: "EGR Assembly Line B - Pune",
     minifactory: "MF2",
@@ -261,15 +261,297 @@ let kaizens: Kaizen[] = [
     ideaBy: "Deepak Verma (Operator)",
     implementedBy: "Deepak Verma",
     preparedBy: "Deepak Verma",
+    approvedBy: "Rajesh Patil (Supervisor)",
+    verifiedBy: "Amit Mehta (Kaizen Lead)",
+    status: "Approved",
+    classification: "Kaizen",
+    remark: "Great ergonomic improvement for MF2 operators.",
+    photoBefore: svgBeforeGeneric,
+    photoAfter: svgAfterGeneric,
+    result: "Ergonomic strain resolved. Saved 3 seconds per EGR sub-assembly.",
+    createdAt: "2026-07-12T15:05:00.000Z"
+  },
+  {
+    id: "kz-7",
+    srNo: "KZ-2026-007",
+    month: "July",
+    suggestionDate: "2026-07-14",
+    title: "Optical Poka-Yoke Sensor for EGR Flange Gasket Insertion",
+    problemBefore: "Gaskets were occasionally skipped during high-speed EGR valve assembly, causing customer air-leak defect complaints.",
+    counterMeasureAfter: "Installed a infrared reflective proximity sensor above gasket tray linked to assembly press PLC lock.",
+    area: "EGR Assembly Cell 2",
+    minifactory: "MF2",
+    location: "EGR Line - Cell 2",
+    machine: "EGR Press ST-02",
+    closingTargetDate: "2026-07-20",
+    implementedDate: "2026-07-16",
+    costSave: 320000,
+    benefits: { p: true, q: true, c: true, d: false, s: false, m: false },
+    ideaBy: "Sanjay Patil (Process Engineer)",
+    implementedBy: "Sanjay Patil & Quality Team",
+    preparedBy: "Sanjay Patil",
+    approvedBy: "Sunita Rao (Quality Lead)",
+    verifiedBy: "Amit Mehta (Kaizen Lead)",
+    status: "Approved",
+    classification: "Kaizen",
+    remark: "Zero defect poka-yoke deployment for MF2 EGR line.",
+    photoBefore: svgBeforeGeneric,
+    photoAfter: svgAfterGeneric,
+    result: "100% gasket presence verification prior to press operation.",
+    createdAt: "2026-07-14T09:30:00.000Z"
+  },
+  {
+    id: "kz-8",
+    srNo: "KZ-2026-008",
+    month: "July",
+    suggestionDate: "2026-07-15",
+    title: "Digital Bluetooth Caliper Auto-Sync in Metrology Lab",
+    problemBefore: "Quality inspectors manually typed dimension values from digital vernier calipers into Excel, introducing human transcription errors.",
+    counterMeasureAfter: "Integrated Bluetooth digital calipers with instant USB HID receiver to directly push dimension values into QMS database.",
+    area: "Quality Assurance Metrology",
+    minifactory: "Quality",
+    location: "CMM Room - Main Plant",
+    machine: "Mitutoyo Quality Bench",
+    closingTargetDate: "2026-07-22",
+    implementedDate: "2026-07-18",
+    costSave: 110000,
+    benefits: { p: true, q: true, c: true, d: true, s: false, m: false },
+    ideaBy: "Sunita Rao (Quality Specialist)",
+    implementedBy: "Sunita Rao",
+    preparedBy: "Sunita Rao",
+    approvedBy: "Amit Mehta (Kaizen Lead)",
+    verifiedBy: "Amit Mehta (Kaizen Lead)",
+    status: "Approved",
+    classification: "Kaizen",
+    remark: "Excellent quality digitization project.",
+    photoBefore: svgBeforeGeneric,
+    photoAfter: svgAfterGeneric,
+    result: "Inspection data log time reduced by 60%. Zero typing errors.",
+    createdAt: "2026-07-15T14:10:00.000Z"
+  },
+  {
+    id: "kz-9",
+    srNo: "KZ-2026-009",
+    month: "July",
+    suggestionDate: "2026-07-18",
+    title: "Coolant Recirculation Oil Skimmer on CNC Machining Center",
+    problemBefore: "Trampoil accumulation on top of CNC coolant tanks caused anaerobic bacterial growth, bad odor, and shortened coolant life.",
+    counterMeasureAfter: "Mounted a disk-type oil skimmer with automatic timer on CNC coolant tank to continuously remove surface trampoil.",
+    area: "Machining & Milling Shop",
+    minifactory: "Machining",
+    location: "Bay 4 Machining Section",
+    machine: "CNC Milling Center ST-08",
+    closingTargetDate: "2026-07-24",
+    implementedDate: "2026-07-21",
+    costSave: 175000,
+    benefits: { p: true, q: true, c: true, d: false, s: true, m: true },
+    ideaBy: "Sanjay Patil (Machining Lead)",
+    implementedBy: "Sanjay Patil",
+    preparedBy: "Sanjay Patil",
+    approvedBy: "Rajesh Patil (Supervisor)",
+    verifiedBy: "Amit Mehta (Kaizen Lead)",
+    status: "Approved",
+    classification: "Kaizen",
+    remark: "Doubled coolant usable lifespan in Machining Shop.",
+    photoBefore: svgBeforeGeneric,
+    photoAfter: svgAfterGeneric,
+    result: "Coolant change interval extended from 30 days to 90 days.",
+    createdAt: "2026-07-18T16:00:00.000Z"
+  },
+  {
+    id: "kz-10",
+    srNo: "KZ-2026-010",
+    month: "July",
+    suggestionDate: "2026-07-20",
+    title: "Gravity Roller Chute for Vacuum Pump Sub-Assemblies",
+    problemBefore: "Operators carried heavy cast pump housings by hand 8 meters between cleaning station and assembly press.",
+    counterMeasureAfter: "Fabricated an unpowered inclined gravity roller chute connecting cleaning tank directly to assembly press.",
+    area: "Vacuum Pump Line 1",
+    minifactory: "MF1",
+    location: "Cell 1 North - Pune",
+    machine: "Vacuum Pump Line 1",
+    closingTargetDate: "2026-07-26",
+    implementedDate: "2026-07-23",
+    costSave: 195000,
+    benefits: { p: true, q: false, c: true, d: true, s: true, m: true },
+    ideaBy: "Rahul Sharma (ITI Operator)",
+    implementedBy: "Rahul Sharma & Maintenance",
+    preparedBy: "Rahul Sharma",
+    approvedBy: "Rajesh Patil (Supervisor)",
+    verifiedBy: "Amit Mehta (Kaizen Lead)",
+    status: "Approved",
+    classification: "Kaizen",
+    remark: "Material handling fatigue eliminated on MF1 line.",
+    photoBefore: svgBeforeGeneric,
+    photoAfter: svgAfterGeneric,
+    result: "Manual transfer effort eliminated. Smooth inline flow achieved.",
+    createdAt: "2026-07-20T10:00:00.000Z"
+  },
+  {
+    id: "kz-11",
+    srNo: "KZ-2026-011",
+    month: "July",
+    suggestionDate: "2026-07-22",
+    title: "Laser Proximity Sensor Alignment for EGR Flange Positioning",
+    problemBefore: "Manual alignment of EGR valve flanges before torqueing relies on visual estimation by operators, leading to 3-4 rework instances per shift.",
+    counterMeasureAfter: "Proposed installing a dual laser beam crosshair guide to project exact mounting coordinates onto the EGR flange.",
+    area: "EGR Line 2 - Pune",
+    minifactory: "MF2",
+    location: "Cell 2 West - Pune",
+    machine: "Flange Torqueing Station #2",
+    closingTargetDate: "2026-08-15",
+    implementedDate: "",
+    costSave: 120000,
+    benefits: { p: true, q: true, c: true, d: false, s: false, m: false },
+    ideaBy: "Suresh Kumar (Operator)",
+    implementedBy: "Pending Committee Review",
+    preparedBy: "Suresh Kumar",
     approvedBy: "",
     verifiedBy: "",
     status: "Pending",
     classification: "Pending",
-    remark: "",
+    remark: "Awaiting Committee Review and evaluation.",
     photoBefore: svgBeforeGeneric,
     photoAfter: svgAfterGeneric,
-    result: "Operator ergonomic fatigue complaints resolved. Pushing the fast-moving bins forward saved 3 seconds per EGR sub-assembly.",
-    createdAt: "2026-07-12T15:05:00.000Z"
+    result: "Awaiting implementation approval.",
+    createdAt: "2026-07-22T08:00:00.000Z"
+  },
+  {
+    id: "kz-12",
+    srNo: "KZ-2026-012",
+    month: "August",
+    suggestionDate: "2026-08-02",
+    title: "Vibration Isolator Rubber Pads under Vacuum Pump Tester",
+    problemBefore: "High frequency vibration from neighboring CNC milling shop transfers through shop floor concrete to Vacuum Pump micro-leak detector.",
+    counterMeasureAfter: "Install 25mm thick neoprene anti-vibration damping pads under all 4 legs of the Vacuum Pump testing enclosure.",
+    area: "Vacuum Pump Line 1 - Pune",
+    minifactory: "MF1",
+    location: "Bay 1 East - Pune",
+    machine: "Leak Detector Station #1",
+    closingTargetDate: "2026-08-20",
+    implementedDate: "",
+    costSave: 80000,
+    benefits: { p: false, q: true, c: true, d: false, s: false, m: true },
+    ideaBy: "Rahul Sharma (ITI Operator)",
+    implementedBy: "Pending Committee Review",
+    preparedBy: "Rahul Sharma",
+    approvedBy: "",
+    verifiedBy: "",
+    status: "Pending",
+    classification: "Pending",
+    remark: "Submitted for August evaluation session.",
+    photoBefore: svgBeforeGeneric,
+    photoAfter: svgAfterGeneric,
+    result: "Pending trial run.",
+    createdAt: "2026-08-02T11:30:00.000Z"
+  },
+  {
+    id: "kz-13",
+    srNo: "KZ-2026-013",
+    month: "August",
+    suggestionDate: "2026-08-05",
+    title: "Color-Coded Fixture Jigs for Machining Line Tooling",
+    problemBefore: "Different CNC fixture clamps look identical, causing new operators to mix up clamp settings during product variant changeovers.",
+    counterMeasureAfter: "Apply high-durability epoxy color bands (Red for Variant A, Blue for Variant B) with matching clamp guide slots.",
+    area: "Hosur Machining Shop",
+    minifactory: "Machining",
+    location: "Section B - Hosur",
+    machine: "CNC Lathe Machine #4",
+    closingTargetDate: "2026-08-25",
+    implementedDate: "",
+    costSave: 95000,
+    benefits: { p: true, q: true, c: false, d: true, s: false, m: false },
+    ideaBy: "Sanjay Patil (Senior Machinist)",
+    implementedBy: "Pending Committee Review",
+    preparedBy: "Sanjay Patil",
+    approvedBy: "",
+    verifiedBy: "",
+    status: "Pending",
+    classification: "Pending",
+    remark: "Poka-yoke suggestion submitted for review.",
+    photoBefore: svgBeforeGeneric,
+    photoAfter: svgAfterGeneric,
+    result: "Under committee evaluation.",
+    createdAt: "2026-08-05T14:15:00.000Z"
+  }
+];
+
+// In-memory data store for Open Impact Points & Action Items
+let impactActions: any[] = [
+  {
+    id: "ia-1",
+    kaizenSrNo: "KZ-2026-001",
+    kaizenTitle: "Air Leak Reduction at Vacuum Pump Test Bench",
+    department: "MF1",
+    category: "Method",
+    impactDescription: "Update SOP Rev 3.2 for pneumatic coupler torque standards and incorporate daily leak inspection in pre-shift checklist.",
+    assignedOwner: "Rahul Sharma (ITI Operator)",
+    targetDate: "2026-08-20",
+    status: "In Progress",
+    actionTaken: "Drafted SOP update. Pending final sign-off from Quality Supervisor.",
+    closedDate: "",
+    verifiedBy: "Amit Mehta",
+    createdAt: "2026-07-20T10:00:00.000Z"
+  },
+  {
+    id: "ia-2",
+    kaizenSrNo: "KZ-2026-002",
+    kaizenTitle: "Organized 5S Shadow Board for EGR Valve Tooling",
+    department: "MF2",
+    category: "Horizontal Deployment",
+    impactDescription: "Replicate 5S tool shadow board across all 4 neighboring EGR Valve assembly stations in Chennai plant.",
+    assignedOwner: "Sunita Rao (Technician)",
+    targetDate: "2026-08-28",
+    status: "Open",
+    actionTaken: "Shadow board materials ordered from vendor.",
+    closedDate: "",
+    verifiedBy: "",
+    createdAt: "2026-07-22T09:00:00.000Z"
+  },
+  {
+    id: "ia-3",
+    kaizenSrNo: "KZ-2026-003",
+    kaizenTitle: "Interlocked Safety Shield on Pump Housing Grinder",
+    department: "Machining",
+    category: "Safety",
+    impactDescription: "Perform safety interlocking circuit audit on all grinding machines in Hosur shop floor.",
+    assignedOwner: "Sanjay Patil (Senior Machinist)",
+    targetDate: "2026-08-10",
+    status: "Closed",
+    actionTaken: "Interlock audit completed on 6 grinding machines. All micro-switches verified operational.",
+    closedDate: "2026-08-10",
+    verifiedBy: "Vikram Sen (Safety Lead)",
+    createdAt: "2026-07-25T11:00:00.000Z"
+  },
+  {
+    id: "ia-4",
+    kaizenSrNo: "KZ-2026-004",
+    kaizenTitle: "PTFE Self-Centering Guide Rails for BPV Conveyor",
+    department: "MF3",
+    category: "Machine",
+    impactDescription: "Update PM checklist for monthly wear inspection of PTFE guide rails.",
+    assignedOwner: "Arjun Mehra (Automation Lead)",
+    targetDate: "2026-08-18",
+    status: "Open",
+    actionTaken: "Pending addition to ERP maintenance schedule.",
+    closedDate: "",
+    verifiedBy: "",
+    createdAt: "2026-07-28T14:20:00.000Z"
+  },
+  {
+    id: "ia-5",
+    kaizenSrNo: "KZ-2026-008",
+    kaizenTitle: "Digital Bluetooth Caliper Auto-Sync in Metrology Lab",
+    department: "Quality",
+    category: "Measurement",
+    impactDescription: "Standardize Bluetooth HID USB protocol settings across all Metrology Lab measurement benches.",
+    assignedOwner: "Sunita Rao (Quality Specialist)",
+    targetDate: "2026-08-25",
+    status: "In Progress",
+    actionTaken: "2 out of 5 benches updated with auto-sync firmware.",
+    closedDate: "",
+    verifiedBy: "Amit Mehta",
+    createdAt: "2026-08-01T08:45:00.000Z"
   }
 ];
 
@@ -814,6 +1096,61 @@ app.put("/api/kaizens/:id", (req, res) => {
   };
 
   res.json({ success: true, data: kaizens[index] });
+});
+
+// API: Open Impact Points & Action Items
+app.get("/api/impactactions", (req, res) => {
+  res.json({ success: true, data: impactActions });
+});
+
+app.post("/api/impactactions", (req, res) => {
+  try {
+    const data = req.body;
+    const newAction = {
+      id: `ia-${Date.now()}`,
+      kaizenSrNo: data.kaizenSrNo || "KZ-GENERAL",
+      kaizenTitle: data.kaizenTitle || "General Shopfloor Action",
+      department: data.department || "MF1",
+      category: data.category || "Method",
+      impactDescription: data.impactDescription || "",
+      assignedOwner: data.assignedOwner || "Unassigned",
+      targetDate: data.targetDate || new Date().toISOString().split('T')[0],
+      status: data.status || "Open",
+      actionTaken: data.actionTaken || "",
+      closedDate: data.closedDate || "",
+      verifiedBy: data.verifiedBy || "",
+      createdAt: new Date().toISOString()
+    };
+    impactActions.unshift(newAction);
+    res.json({ success: true, data: newAction });
+  } catch (error: any) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+app.put("/api/impactactions/:id", (req, res) => {
+  try {
+    const { id } = req.params;
+    const updates = req.body;
+    const idx = impactActions.findIndex(item => item.id === id);
+    if (idx === -1) {
+      return res.status(404).json({ success: false, error: "Impact Action not found" });
+    }
+    impactActions[idx] = { ...impactActions[idx], ...updates };
+    res.json({ success: true, data: impactActions[idx] });
+  } catch (error: any) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+app.delete("/api/impactactions/:id", (req, res) => {
+  try {
+    const { id } = req.params;
+    impactActions = impactActions.filter(item => item.id !== id);
+    res.json({ success: true, message: "Deleted successfully" });
+  } catch (error: any) {
+    res.status(500).json({ success: false, error: error.message });
+  }
 });
 
 // API: AI-Assist Kaizen Analysis Endpoint using gemini-3.5-flash

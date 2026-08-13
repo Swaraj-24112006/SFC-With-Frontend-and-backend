@@ -8,10 +8,10 @@
 }
 
 @media print {
-  /* Set portrait layout and clean margins */
+  /* Set A3 landscape layout and clean margins for Kaizen and PPSR sheets */
   @page {
-    size: portrait;
-    margin: 15mm 15mm 15mm 15mm;
+    size: A3 landscape;
+    margin: 8mm;
   }
 
   /* Force browsers to print all background colors and images */
@@ -21,12 +21,20 @@
     color-adjust: exact !important;
   }
 
+  /* Hide non-printable elements */
+  .no-print, nav, header, button:not(.print-keep) {
+    display: none !important;
+  }
+
   /* Reset layout for full width page-level prints */
   html, body {
     background: #ffffff !important;
     background-color: #ffffff !important;
     color: #000000 !important;
     height: auto !important;
+    width: 100% !important;
+    margin: 0 !important;
+    padding: 0 !important;
     overflow: visible !important;
   }
 

@@ -1,18 +1,15 @@
 import React, { useState, useEffect } from 'react';
 import Header from './components/Header';
 import Sidebar from './components/Sidebar';
-import Dashboard from './components/Dashboard';
-import KaizenSheetForm from './components/KaizenSheetForm';
-import KaizenReviewBoard from './components/KaizenReviewBoard';
-import KaizenSpreadsheet from './components/KaizenSpreadsheet';
-import GlobalDashboard from './components/GlobalDashboard';
-import RedFlagSystem from './components/RedFlagSystem';
-import FiveSAudits from './components/FiveSAudits';
-import SafetyIncidents from './components/SafetyIncidents';
-import PpsrSystem from './components/PpsrSystem';
 import PpsrSheetInspect from './components/PpsrSheetInspect';
-import CftMonthlyAwards from './components/CftMonthlyAwards';
-import { Kaizen, UserPersona, RedFlag, FiveSAudit, SafetyIncident, PpsrReport, PpsrMeetingLog } from './types';
+import GlobalDashboardModule from './modules/GlobalDashboardModule';
+import KaizenModule from './modules/KaizenModule';
+import RedFlagModule from './modules/RedFlagModule';
+import FiveSModule from './modules/FiveSModule';
+import SafetyModule from './modules/SafetyModule';
+import PpsrModule from './modules/PpsrModule';
+import CftAwardsModule from './modules/CftAwardsModule';
+import { Kaizen, UserPersona, RedFlag, FiveSAudit, SafetyIncident, PpsrReport, PpsrMeetingLog, OpenImpactAction } from './types';
 import { Eye, X, Award, Lightbulb, Check, FileText, CheckCircle, HelpCircle, Printer, LayoutDashboard, Flag, Sparkles, ShieldAlert, Compass, Menu } from 'lucide-react';
 import { formatIndianRupees } from './utils';
 
@@ -23,7 +20,7 @@ export default function App() {
   const [activeModule, setActiveModule] = useState<'global-dashboard' | 'kaizen' | 'redflag' | 'fives' | 'safety' | 'ppsr' | 'cft-awards'>('global-dashboard');
   
   // Kaizen internal tab state
-  const [activeTab, setActiveTab] = useState<'dashboard' | 'form' | 'committee' | 'list' | 'cft-awards'>('dashboard');
+  const [activeTab, setActiveTab] = useState<'dashboard' | 'form' | 'committee' | 'list' | 'cft-awards' | 'impact-tracker'>('dashboard');
 
   // Mobile drawer state
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
@@ -35,6 +32,7 @@ export default function App() {
   const [safetyIncidents, setSafetyIncidents] = useState<SafetyIncident[]>([]);
   const [ppsrReports, setPpsrReports] = useState<PpsrReport[]>([]);
   const [ppsrMeetings, setPpsrMeetings] = useState<PpsrMeetingLog[]>([]);
+  const [impactActions, setImpactActions] = useState<OpenImpactAction[]>([]);
 
   // Safe custom notification state to replace iframe-blocked alert() calls
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'info' } | null>(null);
@@ -125,6 +123,11 @@ export default function App() {
       const resM = await fetch('/api/ppsrmeetings');
       const dataM = await resM.json();
       if (dataM.success) setPpsrMeetings(dataM.data);
+
+      // Fetch Open Impact Actions
+      const resI = await fetch('/api/impactactions');
+      const dataI = await resI.json();
+      if (dataI.success) setImpactActions(dataI.data);
 
     } catch (err) {
       console.error('Error loading SFMS data from backend:', err);
@@ -308,6 +311,51 @@ export default function App() {
     }
   };
 
+  // Open Impact Action handlers
+  const handleAddImpactAction = async (actData: Partial<OpenImpactAction>) => {
+    try {
+      const res = await fetch('/api/impactactions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(actData)
+      });
+      const data = await res.json();
+      if (data.success) {
+        setImpactActions(prev => [data.data, ...prev]);
+      }
+    } catch (err) {
+      console.error('Error adding Impact Action:', err);
+    }
+  };
+
+  const handleUpdateImpactAction = async (id: string, updates: Partial<OpenImpactAction>) => {
+    try {
+      const res = await fetch(`/api/impactactions/${id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(updates)
+      });
+      const data = await res.json();
+      if (data.success) {
+        setImpactActions(prev => prev.map(a => a.id === id ? data.data : a));
+      }
+    } catch (err) {
+      console.error('Error updating Impact Action:', err);
+    }
+  };
+
+  const handleDeleteImpactAction = async (id: string) => {
+    try {
+      const res = await fetch(`/api/impactactions/${id}`, { method: 'DELETE' });
+      const data = await res.json();
+      if (data.success) {
+        setImpactActions(prev => prev.filter(a => a.id !== id));
+      }
+    } catch (err) {
+      console.error('Error deleting Impact Action:', err);
+    }
+  };
+
   const openRedflagsCount = redFlags.filter(r => r.status === 'Open' || r.status === 'In-Progress').length;
 
   return (
@@ -360,9 +408,9 @@ export default function App() {
           ) : (
             <div className="animate-fade-in">
             
-            {/* 1. Global Dashboard */}
+            {/* 1. Global Executive Dashboard Module */}
             {activeModule === 'global-dashboard' && (
-              <GlobalDashboard
+              <GlobalDashboardModule
                 kaizens={kaizens}
                 redFlags={redFlags}
                 fiveSAudits={fiveSAudits}
@@ -399,54 +447,26 @@ export default function App() {
 
             {/* 2. Kaizen Continuous Improvement Module */}
             {activeModule === 'kaizen' && (
-              <div className="space-y-1">
-
-                {activeTab === 'dashboard' && (
-                  <Dashboard
-                    kaizens={kaizens}
-                    onSelectKaizen={setInspectKaizen}
-                    onNavigateToTab={(tab) => {
-                      if (tab === 'form') handleSetPersona('operator');
-                      else if (tab === 'committee') handleSetPersona('committee');
-                      else setActiveTab(tab);
-                    }}
-                  />
-                )}
-
-                {activeTab === 'list' && (
-                  <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-4">
-                    <div className="bg-white border border-slate-200 p-5 rounded-2xl">
-                      <h2 className="text-sm font-black text-slate-800 uppercase tracking-wide font-mono mb-1">📋 Kaizen Spreadsheet Register</h2>
-                      <p className="text-xs text-slate-400 font-medium">Click on any entry row to inspect, print, or review its complete Kaizen sheet.</p>
-                    </div>
-                    <KaizenSpreadsheet kaizens={kaizens} onSelectKaizen={setInspectKaizen} onUpdateKaizen={handleUpdateKaizen} />
-                  </div>
-                )}
-
-                {activeTab === 'form' && (
-                  <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
-                    <KaizenSheetForm onAddKaizen={handleAddKaizen} onCancel={() => setActiveTab('dashboard')} />
-                  </div>
-                )}
-
-                {activeTab === 'committee' && (
-                  <KaizenReviewBoard kaizens={kaizens} onUpdateKaizen={handleUpdateKaizen} />
-                )}
-
-                {activeTab === 'cft-awards' && (
-                  <CftMonthlyAwards
-                    kaizens={kaizens}
-                    ppsrReports={ppsrReports}
-                    onUpdateKaizen={handleUpdateKaizen}
-                    onUpdatePpsrReport={handleUpdatePpsrReport}
-                  />
-                )}
-              </div>
+              <KaizenModule
+                activeTab={activeTab}
+                setActiveTab={setActiveTab}
+                kaizens={kaizens}
+                ppsrReports={ppsrReports}
+                impactActions={impactActions}
+                onAddKaizen={handleAddKaizen}
+                onUpdateKaizen={handleUpdateKaizen}
+                onAddImpactAction={handleAddImpactAction}
+                onUpdateImpactAction={handleUpdateImpactAction}
+                onDeleteImpactAction={handleDeleteImpactAction}
+                onUpdatePpsrReport={handleUpdatePpsrReport}
+                onSelectKaizen={setInspectKaizen}
+                handleSetPersona={handleSetPersona}
+              />
             )}
 
-            {/* 3. Red Flag Quality Portal */}
+            {/* 3. Red Flag Quality Portal Module */}
             {activeModule === 'redflag' && (
-              <RedFlagSystem
+              <RedFlagModule
                 redFlags={redFlags}
                 onAddRedFlag={handleAddRedFlag}
                 onUpdateRedFlag={handleUpdateRedFlag}
@@ -456,9 +476,9 @@ export default function App() {
               />
             )}
 
-            {/* 4. 5S Audit system */}
+            {/* 4. 5S Audit System Module */}
             {activeModule === 'fives' && (
-              <FiveSAudits
+              <FiveSModule
                 audits={fiveSAudits}
                 onAddAudit={handleAddFiveSAudit}
                 initialAction={initialFiveSAction}
@@ -466,9 +486,9 @@ export default function App() {
               />
             )}
 
-            {/* 5. Safety tracker */}
+            {/* 5. Safety Tracker Module */}
             {activeModule === 'safety' && (
-              <SafetyIncidents
+              <SafetyModule
                 incidents={safetyIncidents}
                 onAddIncident={handleAddSafetyIncident}
                 onUpdateIncident={handleUpdateSafetyIncident}
@@ -477,9 +497,9 @@ export default function App() {
               />
             )}
 
-            {/* 6. PPSR Root cause problem solver */}
+            {/* 6. PPSR Root Cause Problem Solver Module */}
             {activeModule === 'ppsr' && (
-              <PpsrSystem
+              <PpsrModule
                 reports={ppsrReports}
                 kaizens={kaizens}
                 onAddReport={handleAddPpsrReport}
@@ -493,9 +513,9 @@ export default function App() {
               />
             )}
 
-            {/* 7. CFT Monthly Awards & Voting */}
+            {/* 7. CFT Monthly Best Awards Module */}
             {activeModule === 'cft-awards' && (
-              <CftMonthlyAwards
+              <CftAwardsModule
                 kaizens={kaizens}
                 ppsrReports={ppsrReports}
                 onUpdateKaizen={handleUpdateKaizen}
