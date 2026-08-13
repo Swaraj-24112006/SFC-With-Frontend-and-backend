@@ -3,7 +3,7 @@ import { PpsrReport } from '../types';
 import { X, Printer, Compass, CheckCircle2, AlertCircle, Sparkles, HelpCircle, Download, Loader2 } from 'lucide-react';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import IshikawaFishbone from './IshikawaFishbone';
-import { downloadElementAsPdf, triggerA3Print } from '../utils/pdfExporter';
+import { downloadElementAsPdf, triggerA4Print, triggerA3Print } from '../utils/pdfExporter';
 
 interface PpsrSheetInspectProps {
   report: PpsrReport;
@@ -60,7 +60,7 @@ export default function PpsrSheetInspect({ report, onClose }: PpsrSheetInspectPr
     await downloadElementAsPdf('ppsr-sheet-content', {
       filename: `PPSR_Report_${report.ppsrNo}.pdf`,
       orientation: 'landscape',
-      format: 'a3'
+      format: 'a4'
     });
     setIsPdfExporting(false);
   };
@@ -101,14 +101,14 @@ export default function PpsrSheetInspect({ report, onClose }: PpsrSheetInspectPr
               )}
             </button>
 
-            {/* Print A3 Sheet button */}
+            {/* Print A4 Sheet button */}
             <button
               type="button"
-              onClick={() => triggerA3Print('ppsr-sheet-content', `PPSR Report - ${report.ppsrNo}`)}
+              onClick={() => triggerA4Print('ppsr-sheet-content', `PPSR Report - ${report.ppsrNo}`)}
               className="flex items-center space-x-2 px-4 py-2 bg-violet-600 hover:bg-violet-700 text-white rounded-xl text-xs font-black uppercase tracking-wider font-mono shadow-md cursor-pointer transition-all hover:scale-105"
             >
               <Printer className="w-4 h-4" />
-              <span>Print A3 Sheet</span>
+              <span>Print A4 Sheet</span>
             </button>
 
             <button

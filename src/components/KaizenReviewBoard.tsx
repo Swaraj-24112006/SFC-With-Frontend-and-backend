@@ -5,7 +5,7 @@ import KaizenPresentationMode from './KaizenPresentationMode';
 import KaizenImpactModal from './KaizenImpactModal';
 import PhotoZoomModal from './PhotoZoomModal';
 import { formatIndianRupees } from '../utils';
-import { downloadElementAsPdf, triggerA3Print } from '../utils/pdfExporter';
+import { downloadElementAsPdf, triggerA4Print, triggerA3Print } from '../utils/pdfExporter';
 
 interface KaizenReviewBoardProps {
   kaizens: Kaizen[];
@@ -57,14 +57,14 @@ export default function KaizenReviewBoard({ kaizens, onUpdateKaizen }: KaizenRev
   // PDF exporting loader
   const [isPdfExporting, setIsPdfExporting] = useState(false);
 
-  // Download PDF handler
+  // Download A4 PDF handler
   const handleDownloadPdf = async () => {
     if (!selectedKaizen) return;
     setIsPdfExporting(true);
     await downloadElementAsPdf('a3-paper-document', {
-      filename: `Kaizen_A3_Sheet_${selectedKaizen.srNo}.pdf`,
+      filename: `Kaizen_A4_Sheet_${selectedKaizen.srNo}.pdf`,
       orientation: 'landscape',
-      format: 'a3'
+      format: 'a4'
     });
     setIsPdfExporting(false);
   };
@@ -646,7 +646,7 @@ export default function KaizenReviewBoard({ kaizens, onUpdateKaizen }: KaizenRev
                 </select>
               </div>
 
-              {/* Download PDF Button */}
+              {/* Download A4 PDF Button */}
               <button
                 type="button"
                 disabled={isPdfExporting}
@@ -656,24 +656,24 @@ export default function KaizenReviewBoard({ kaizens, onUpdateKaizen }: KaizenRev
                 {isPdfExporting ? (
                   <>
                     <Loader2 className="w-4 h-4 animate-spin" />
-                    <span>Generating PDF...</span>
+                    <span>Generating A4 PDF...</span>
                   </>
                 ) : (
                   <>
                     <Download className="w-4 h-4 text-violet-200" />
-                    <span>Download PDF</span>
+                    <span>Download A4 PDF</span>
                   </>
                 )}
               </button>
 
-              {/* Print A3 Sheet Button */}
+              {/* Print A4 Sheet Button */}
               <button
                 type="button"
-                onClick={() => triggerA3Print('a3-paper-document', `Kaizen A3 Sheet - ${selectedKaizen.srNo}`)}
+                onClick={() => triggerA4Print('a3-paper-document', `Kaizen A4 Sheet - ${selectedKaizen.srNo}`)}
                 className="px-5 py-2.5 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 active:scale-95 text-slate-950 font-black text-xs rounded-xl shadow-md transition flex items-center space-x-2 font-mono uppercase tracking-wider cursor-pointer border border-amber-300"
               >
                 <Printer className="w-4.5 h-4.5" />
-                <span>PRINT A3 SHEET</span>
+                <span>PRINT A4 SHEET</span>
               </button>
 
               {/* Presentation Mode */}

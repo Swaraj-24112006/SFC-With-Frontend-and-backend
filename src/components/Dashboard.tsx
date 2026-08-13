@@ -2,11 +2,12 @@ import React, { useState } from 'react';
 import { Kaizen } from '../types';
 import { BarChart, Clock, CheckCircle, TrendingUp, IndianRupee, Activity, Users, Award, HelpCircle, ChevronDown, ChevronRight } from 'lucide-react';
 import { formatIndianRupees, formatIndianRupeesCompact } from '../utils';
+import ExecutiveAnalyticsBoard from './ExecutiveAnalyticsBoard';
 
 interface DashboardProps {
   kaizens: Kaizen[];
   onSelectKaizen: (k: Kaizen) => void;
-  onNavigateToTab: (tab: 'form' | 'committee' | 'list' | 'cft-awards') => void;
+  onNavigateToTab: (tab: 'form' | 'committee' | 'list' | 'cft-awards' | 'process-flowchart') => void;
 }
 
 export default function Dashboard({ kaizens, onSelectKaizen, onNavigateToTab }: DashboardProps) {
@@ -67,6 +68,12 @@ export default function Dashboard({ kaizens, onSelectKaizen, onNavigateToTab }: 
           </div>
           <div className="flex flex-wrap gap-3">
             <button
+              onClick={() => onNavigateToTab('process-flowchart')}
+              className="px-5 py-3 bg-indigo-600 hover:bg-indigo-500 text-white font-bold rounded-xl text-xs transition-all shadow-md flex items-center space-x-1.5 cursor-pointer border border-indigo-400"
+            >
+              <span>🔄 End-to-End Flowchart</span>
+            </button>
+            <button
               onClick={() => onNavigateToTab('form')}
               className="px-5 py-3 bg-emerald-500 hover:bg-emerald-400 text-slate-950 rounded-xl text-xs font-bold transition-all shadow-md shadow-emerald-500/20 flex items-center space-x-1.5 cursor-pointer"
             >
@@ -87,6 +94,9 @@ export default function Dashboard({ kaizens, onSelectKaizen, onNavigateToTab }: 
           </div>
         </div>
       </div>
+
+      {/* Executive Analytics Dashboard (Matching User Uploaded Benchmark Charts) */}
+      <ExecutiveAnalyticsBoard />
 
       {/* Bento Grid Stats */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">

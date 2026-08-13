@@ -20,7 +20,8 @@ import {
   Medal,
   Check,
   Building,
-  ArrowUpRight
+  ArrowUpRight,
+  ArrowLeft
 } from 'lucide-react';
 import { formatIndianRupees } from '../utils';
 
@@ -567,18 +568,18 @@ export default function CftMonthlyAwards({
         </div>
 
         <div className="overflow-x-auto">
-          <table className="w-full text-xs text-left border-collapse min-w-[1280px]">
+          <table className="w-full text-xs text-left border-collapse min-w-[1000px]">
             <thead>
               <tr className="bg-slate-950 text-slate-300 font-mono text-[11px] uppercase border-b border-slate-800">
-                <th className="p-3.5 border-r border-slate-800 w-[110px]">SR No & Date</th>
-                <th className="p-3.5 border-r border-slate-800 w-[240px]">Kaizen Title & Initiator</th>
-                <th className="p-3.5 border-r border-slate-800 w-[160px]">Department Category</th>
-                <th className="p-3.5 border-r border-slate-800 w-[240px]">Problem & Countermeasure</th>
-                <th className="p-3.5 border-r border-slate-800 w-[110px] text-right">Savings (₹)</th>
-                <th className="p-3.5 border-r border-slate-800 text-center bg-amber-950 text-amber-300 font-bold">
+                <th className="p-3 border-r border-slate-800 w-[100px] min-w-[100px]">SR No & Date</th>
+                <th className="p-3 border-r border-slate-800 w-[190px] min-w-[170px]">Kaizen Title & Initiator</th>
+                <th className="p-3 border-r border-slate-800 w-[140px] min-w-[130px]">Department Category</th>
+                <th className="p-3 border-r border-slate-800 w-[210px] min-w-[190px]">Problem & Countermeasure</th>
+                <th className="p-3 border-r border-slate-800 w-[95px] min-w-[90px] text-right">Savings (₹)</th>
+                <th className="p-3 border-r border-slate-800 text-center bg-amber-950 text-amber-300 font-bold min-w-[280px]">
                   ⭐ Present CFT Member Ratings (1–5 Stars)
                 </th>
-                <th className="p-3.5 w-[120px] text-center bg-slate-900 text-amber-400 font-black">
+                <th className="p-3 w-[110px] min-w-[110px] text-center bg-slate-900 text-amber-400 font-black sticky right-0 z-20 shadow-md border-l-2 border-amber-500/40">
                   Cumulative Score
                 </th>
               </tr>
@@ -599,13 +600,13 @@ export default function CftMonthlyAwards({
                     <tr key={k.id} className="hover:bg-amber-50/30 transition-colors group">
                       
                       {/* SR No */}
-                      <td className="p-3.5 border-r border-slate-200 font-mono">
+                      <td className="p-2.5 border-r border-slate-200 font-mono">
                         <span className="font-bold text-slate-900 block">{k.srNo}</span>
                         <span className="text-[10px] text-slate-400 block mt-0.5">{k.implementedDate || k.closingTargetDate}</span>
                         <button
                           type="button"
                           onClick={() => setInspectKaizen(k)}
-                          className="mt-2 px-2 py-1 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 rounded text-[10px] font-bold transition flex items-center space-x-1 cursor-pointer"
+                          className="mt-1.5 px-2 py-0.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 rounded text-[10px] font-bold transition flex items-center space-x-1 cursor-pointer"
                         >
                           <Eye className="w-3 h-3 text-indigo-600" />
                           <span>Inspect Sheet</span>
@@ -613,11 +614,11 @@ export default function CftMonthlyAwards({
                       </td>
 
                       {/* Title & Initiator */}
-                      <td className="p-3.5 border-r border-slate-200 cursor-pointer" onClick={() => setInspectKaizen(k)}>
+                      <td className="p-2.5 border-r border-slate-200 cursor-pointer" onClick={() => setInspectKaizen(k)}>
                         <h4 className="font-bold text-slate-900 leading-snug group-hover:text-indigo-600 transition">
                           {k.title}
                         </h4>
-                        <div className="text-[11px] text-slate-500 mt-1 font-mono">
+                        <div className="text-[11px] text-slate-500 mt-0.5 font-mono">
                           By: <strong className="text-slate-800">{k.ideaBy}</strong>
                         </div>
                         <span className="text-[10px] text-slate-400 font-mono block">
@@ -626,14 +627,14 @@ export default function CftMonthlyAwards({
                       </td>
 
                       {/* Department Dropdown */}
-                      <td className="p-3.5 border-r border-slate-200">
+                      <td className="p-2.5 border-r border-slate-200">
                         <select
                           value={currentCategory}
                           onChange={(e) => setCategoryOverrides({
                             ...categoryOverrides,
                             [k.id]: e.target.value as CategoryKey
                           })}
-                          className="bg-slate-50 border border-slate-300 text-slate-900 text-[11px] font-mono font-bold py-1.5 px-2 rounded-lg focus:outline-none focus:ring-1 focus:ring-amber-500 cursor-pointer w-full"
+                          className="bg-slate-50 border border-slate-300 text-slate-900 text-[11px] font-mono font-bold py-1 px-1.5 rounded-lg focus:outline-none focus:ring-1 focus:ring-amber-500 cursor-pointer w-full"
                         >
                           <option value="MF1">MF1 (Vacuum Pump)</option>
                           <option value="MF2">MF2 (EGR Line)</option>
@@ -645,7 +646,7 @@ export default function CftMonthlyAwards({
                       </td>
 
                       {/* Problem & Countermeasure */}
-                      <td className="p-3.5 border-r border-slate-200 text-[11px] space-y-1">
+                      <td className="p-2.5 border-r border-slate-200 text-[11px] space-y-1">
                         <div className="text-slate-600 line-clamp-2">
                           <span className="font-bold text-red-700 font-mono">Before: </span>
                           {k.problemBefore}
@@ -657,30 +658,30 @@ export default function CftMonthlyAwards({
                       </td>
 
                       {/* Cost Savings */}
-                      <td className="p-3.5 border-r border-slate-200 text-right font-mono font-bold text-emerald-700 text-xs">
+                      <td className="p-2.5 border-r border-slate-200 text-right font-mono font-bold text-emerald-700 text-xs">
                         {k.costSave ? formatIndianRupees(k.costSave) : 'N/A'}
                       </td>
 
                       {/* CFT Rating Buttons */}
-                      <td className="p-3.5 border-r border-slate-200 bg-amber-50/20">
-                        <div className="flex flex-wrap gap-2 justify-center">
+                      <td className="p-2.5 border-r border-slate-200 bg-amber-50/20">
+                        <div className="flex flex-wrap gap-1.5 justify-center">
                           {cftMembers.filter(m => presentMemberIds.includes(m.id)).map(m => {
                             const currentRating = ratings[m.id]?.[k.id] || 0;
 
                             return (
-                              <div key={m.id} className="bg-white border border-slate-300 p-1.5 rounded-xl text-center space-y-1 shadow-2xs">
-                                <span className="text-[9px] font-mono font-bold text-slate-600 block truncate max-w-[65px]">
+                              <div key={m.id} className="bg-white border border-slate-300 p-1 rounded-lg text-center space-y-0.5 shadow-2xs">
+                                <span className="text-[9px] font-mono font-bold text-slate-600 block truncate max-w-[55px]">
                                   {m.name.split(' ')[0]}
                                 </span>
-                                <div className="flex items-center justify-center space-x-0.5">
+                                <div className="flex items-center justify-center space-x-[2px]">
                                   {[1, 2, 3, 4, 5].map(val => (
                                     <button
                                       key={val}
                                       type="button"
                                       onClick={() => handleRateKaizen(m.id, k.id, val)}
-                                      className={`w-5 h-5 text-[10px] font-bold font-mono rounded transition flex items-center justify-center cursor-pointer ${
+                                      className={`w-4.5 h-4.5 text-[9px] font-bold font-mono rounded transition flex items-center justify-center cursor-pointer ${
                                         currentRating === val
-                                          ? 'bg-amber-500 text-slate-950 font-black ring-1 ring-amber-400 scale-110'
+                                          ? 'bg-amber-500 text-slate-950 font-black ring-1 ring-amber-400 scale-105'
                                           : 'bg-slate-100 hover:bg-amber-100 text-slate-600'
                                       }`}
                                     >
@@ -694,10 +695,10 @@ export default function CftMonthlyAwards({
                         </div>
                       </td>
 
-                      {/* Live Cumulative Score */}
-                      <td className="p-3.5 text-center bg-slate-900 text-white font-mono">
-                        <div className="text-base font-black text-amber-400">{totalScore} pts</div>
-                        <div className="text-[10px] text-slate-400 font-bold">{votesCount} / {presentMemberIds.length} votes</div>
+                      {/* Live Cumulative Score - Sticky Right Column */}
+                      <td className="p-2.5 text-center bg-slate-900 text-white font-mono sticky right-0 z-10 shadow-md border-l-2 border-amber-500/40 group-hover:bg-slate-850">
+                        <div className="text-sm sm:text-base font-black text-amber-400">{totalScore} pts</div>
+                        <div className="text-[9px] text-slate-400 font-bold">{votesCount} / {presentMemberIds.length} votes</div>
                       </td>
 
                     </tr>
@@ -830,10 +831,21 @@ export default function CftMonthlyAwards({
           <div className="bg-white rounded-3xl w-full max-w-3xl shadow-2xl border border-slate-200 overflow-hidden flex flex-col my-8">
             
             <div className="bg-slate-900 text-white px-6 py-4 flex items-center justify-between border-b border-slate-800 shrink-0 print:hidden">
-              <div className="flex items-center space-x-2">
-                <Award className="w-5 h-5 text-amber-400" />
-                <span className="font-mono text-xs font-bold text-slate-300">PRINTABLE CERTIFICATE OF EXCELLENCE</span>
+              <div className="flex items-center space-x-3">
+                <button
+                  type="button"
+                  onClick={() => setShowCertificateModal(null)}
+                  className="px-3.5 py-1.5 bg-slate-800 hover:bg-slate-700 active:scale-95 text-slate-200 font-mono font-bold text-xs rounded-xl transition flex items-center space-x-1.5 cursor-pointer border border-slate-700 shrink-0"
+                >
+                  <ArrowLeft className="w-4 h-4 text-amber-400" />
+                  <span>← Back to Awards</span>
+                </button>
+                <div className="flex items-center space-x-2">
+                  <Award className="w-5 h-5 text-amber-400" />
+                  <span className="font-mono text-xs font-bold text-slate-300 hidden sm:inline">PRINTABLE CERTIFICATE OF EXCELLENCE</span>
+                </div>
               </div>
+
               <div className="flex items-center space-x-2">
                 <button
                   type="button"
@@ -846,6 +858,7 @@ export default function CftMonthlyAwards({
                 <button
                   onClick={() => setShowCertificateModal(null)}
                   className="text-slate-400 hover:text-white transition p-1.5 bg-slate-800 rounded-lg"
+                  title="Close Modal"
                 >
                   <X className="w-5 h-5" />
                 </button>
@@ -907,6 +920,27 @@ export default function CftMonthlyAwards({
                 </div>
 
               </div>
+            </div>
+
+            {/* Bottom Modal Action Bar */}
+            <div className="bg-slate-900 text-white px-6 py-4 flex items-center justify-between border-t border-slate-800 shrink-0 print:hidden">
+              <button
+                type="button"
+                onClick={() => setShowCertificateModal(null)}
+                className="px-4 py-2 bg-slate-800 hover:bg-slate-700 active:scale-95 text-slate-200 font-mono font-bold text-xs rounded-xl transition flex items-center space-x-2 cursor-pointer border border-slate-700"
+              >
+                <ArrowLeft className="w-4 h-4 text-amber-400" />
+                <span>← Back to Monthly Awards</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => window.print()}
+                className="flex items-center space-x-2 px-5 py-2 bg-amber-500 hover:bg-amber-400 active:scale-95 text-slate-950 rounded-xl text-xs font-black transition cursor-pointer font-mono"
+              >
+                <Printer className="w-4 h-4" />
+                <span>PRINT CERTIFICATE</span>
+              </button>
             </div>
 
           </div>

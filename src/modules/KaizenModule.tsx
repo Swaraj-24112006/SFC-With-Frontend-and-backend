@@ -5,11 +5,12 @@ import KaizenReviewBoard from '../components/KaizenReviewBoard';
 import KaizenSpreadsheet from '../components/KaizenSpreadsheet';
 import CftMonthlyAwards from '../components/CftMonthlyAwards';
 import OpenImpactTracker from '../components/OpenImpactTracker';
+import KaizenProcessFlowchart from '../components/KaizenProcessFlowchart';
 import { Kaizen, PpsrReport, OpenImpactAction, UserPersona } from '../types';
 
 interface KaizenModuleProps {
-  activeTab: 'dashboard' | 'form' | 'committee' | 'list' | 'cft-awards' | 'impact-tracker';
-  setActiveTab: (tab: 'dashboard' | 'form' | 'committee' | 'list' | 'cft-awards' | 'impact-tracker') => void;
+  activeTab: 'dashboard' | 'form' | 'committee' | 'list' | 'cft-awards' | 'impact-tracker' | 'process-flowchart';
+  setActiveTab: (tab: 'dashboard' | 'form' | 'committee' | 'list' | 'cft-awards' | 'impact-tracker' | 'process-flowchart') => void;
   kaizens: Kaizen[];
   ppsrReports: PpsrReport[];
   impactActions: OpenImpactAction[];
@@ -103,6 +104,10 @@ export default function KaizenModule({
           onUpdateImpactAction={onUpdateImpactAction}
           onDeleteImpactAction={onDeleteImpactAction}
         />
+      )}
+
+      {activeTab === 'process-flowchart' && (
+        <KaizenProcessFlowchart />
       )}
     </div>
   );

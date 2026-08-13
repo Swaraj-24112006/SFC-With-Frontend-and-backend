@@ -21,7 +21,8 @@ import {
   Gauge,
   Trophy,
   Award,
-  Vote
+  Vote,
+  Workflow
 } from 'lucide-react';
 import { UserPersona } from '../types';
 
@@ -288,6 +289,17 @@ export default function Sidebar({
                 >
                   <ClipboardList className="w-3 h-3 shrink-0 text-indigo-400" />
                   <span>🎯 Impact Point & Closure</span>
+                </button>
+                <button
+                  onClick={() => selectSubTab('kaizen', 'process-flowchart')}
+                  className={`w-full flex items-center space-x-2 px-2.5 py-1.5 rounded-lg text-left text-[11px] font-semibold transition ${
+                    activeModule === 'kaizen' && activeTab === 'process-flowchart'
+                      ? 'text-indigo-400 font-bold bg-slate-900/60'
+                      : 'text-indigo-300/80 hover:text-indigo-200 hover:bg-slate-900/30'
+                  }`}
+                >
+                  <Workflow className="w-3 h-3 shrink-0 text-indigo-400" />
+                  <span>🔄 End-to-End Flowchart</span>
                 </button>
                 <button
                   onClick={() => selectSubTab('kaizen', 'list')}

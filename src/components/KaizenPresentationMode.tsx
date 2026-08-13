@@ -26,7 +26,7 @@ import {
 } from 'lucide-react';
 import { formatIndianRupees } from '../utils';
 import PhotoZoomModal from './PhotoZoomModal';
-import { downloadElementAsPdf, triggerA3Print } from '../utils/pdfExporter';
+import { downloadElementAsPdf, triggerA4Print, triggerA3Print } from '../utils/pdfExporter';
 
 interface KaizenPresentationModeProps {
   kaizen: Kaizen;
@@ -72,7 +72,7 @@ export default function KaizenPresentationMode({
     await downloadElementAsPdf('kaizen-presentation-slide', {
       filename: `Kaizen_${kaizen.srNo}_Slide_${currentStep}.pdf`,
       orientation: 'landscape',
-      format: 'a3'
+      format: 'a4'
     });
     setIsPdfExporting(false);
   };
@@ -418,11 +418,11 @@ export default function KaizenPresentationMode({
 
             <button
               type="button"
-              onClick={() => triggerA3Print('kaizen-presentation-slide', `Kaizen Slide - ${kaizen.srNo}`)}
+              onClick={() => triggerA4Print('kaizen-presentation-slide', `Kaizen Slide - ${kaizen.srNo}`)}
               className="px-3 py-2 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-xs font-extrabold uppercase tracking-wider font-mono shadow-md cursor-pointer transition flex items-center space-x-1.5"
             >
               <Printer className="w-4 h-4 text-amber-400" />
-              <span>Print A3</span>
+              <span>Print A4</span>
             </button>
 
             <button
