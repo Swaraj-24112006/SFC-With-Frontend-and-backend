@@ -2,6 +2,7 @@ import express from "express";
 import path from "path";
 import { createServer as createViteServer } from "vite";
 import { GoogleGenAI, Type } from "@google/genai";
+import { createProxyMiddleware } from "http-proxy-middleware";
 import dotenv from "dotenv";
 
 dotenv.config();
@@ -1470,6 +1471,14 @@ app.post("/api/ppsrmeetings", (req, res) => {
 
 // Setup Vite Dev Server / Production routing
 async function startServer() {
+  // Proxy all /api/v1/ traffic to the Django Backend
+  app.use(createProxyMiddleware({ 
+    target: 'http://127.0.0.1:8000', 
+    changeOrigin: true,
+    pathFilter: '/api/v1'
+  }));
+
+
   if (process.env.NODE_ENV !== "production") {
     const vite = await createViteServer({
       server: { middlewareMode: true },

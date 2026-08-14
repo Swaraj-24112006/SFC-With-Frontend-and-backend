@@ -65,6 +65,7 @@ export default function App() {
     }
   }, [toast]);
 
+
   const [isLoading, setIsLoading] = useState(true);
   const [inspectKaizen, setInspectKaizen] = useState<Kaizen | null>(null);
   const [inspectPpsr, setInspectPpsr] = useState<PpsrReport | null>(null);
@@ -94,8 +95,8 @@ export default function App() {
     try {
       setIsLoading(true);
       
-      // Fetch Kaizens
-      const resK = await fetch('/api/kaizens');
+      // Fetch Kaizens from Django Backend
+      const resK = await fetch('/api/v1/kaizens/');
       const dataK = await resK.json();
       if (dataK.success) setKaizens(dataK.data);
 
@@ -140,19 +141,57 @@ export default function App() {
     fetchAllData();
   }, []);
 
-  // Post Kaizen
+  // Post Kaizen — translate camelCase frontend fields → snake_case Django fields
   const handleAddKaizen = async (newKaizen: Partial<Kaizen>) => {
     try {
-      const res = await fetch('/api/kaizens', {
+      // Map frontend camelCase keys to Django snake_case keys
+      const djangoPayload: Record<string, any> = {
+        title: newKaizen.title,
+        month: newKaizen.month || new Date().toLocaleString('en-US', { month: 'long' }),
+        suggestion_date: newKaizen.suggestionDate,
+        problem_before: newKaizen.problemBefore,
+        counter_measure_after: newKaizen.counterMeasureAfter,
+        area: newKaizen.area,
+        mini_factory: newKaizen.minifactory,
+        location: newKaizen.location,
+        machine: newKaizen.machine,
+        closing_target_date: newKaizen.closingTargetDate || null,
+        implementation_date: newKaizen.implementedDate || null,
+        cost_save: newKaizen.costSave ?? 0,
+        idea_by: newKaizen.ideaBy,
+        implemented_by: newKaizen.implementedBy,
+        prepared_by: newKaizen.preparedBy,
+        remark: newKaizen.remark || '',
+        result: newKaizen.result || '',
+        status: 'draft',
+        classification: 'pending',
+      };
+
+      // Map benefits: {p,q,c,d,s,m} → {productivity, quality, cost, delivery, safety, morale}
+      if (newKaizen.benefits) {
+        djangoPayload.benefits = {
+          productivity: newKaizen.benefits.p ?? false,
+          quality: newKaizen.benefits.q ?? false,
+          cost: newKaizen.benefits.c ?? false,
+          delivery: newKaizen.benefits.d ?? false,
+          safety: newKaizen.benefits.s ?? false,
+          morale: newKaizen.benefits.m ?? false,
+        };
+      }
+
+      const res = await fetch('/api/v1/kaizens/', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(newKaizen)
+        body: JSON.stringify(djangoPayload),
       });
       const data = await res.json();
       if (data.success) {
         setKaizens(prev => [data.data, ...prev]);
         setActiveTab('dashboard');
         alert('Your Kaizen Sheet was successfully logged in the system! It is now pending committee review.');
+      } else {
+        console.error('Kaizen POST failed:', data);
+        alert(`Error saving Kaizen: ${JSON.stringify(data)}`);
       }
     } catch (err) {
       console.error('Error adding Kaizen:', err);
@@ -163,15 +202,38 @@ export default function App() {
   // Update Kaizen
   const handleUpdateKaizen = async (id: string, updatedFields: Partial<Kaizen>) => {
     try {
-      const res = await fetch(`/api/kaizens/${id}`, {
-        method: 'PUT',
+      let endpoint = `/api/v1/kaizens/${id}/`;
+      let method = 'PATCH';
+      let body: any = { ...updatedFields };
+
+      // Map simplistic frontend status updates to Django's strict workflow actions
+      if (updatedFields.status === 'Approved' || updatedFields.status === 'Good Point') {
+        endpoint = `/api/v1/kaizens/${id}/approve/`;
+        method = 'POST';
+        body = { 
+          classification: updatedFields.status === 'Good Point' ? 'good_point' : 'kaizen',
+          remarks: updatedFields.remark || 'Approved' 
+        };
+      } else if (updatedFields.status === 'Rejected') {
+        endpoint = `/api/v1/kaizens/${id}/reject/`;
+        method = 'POST';
+        body = { reason: updatedFields.remark || 'Rejected by committee' };
+      } else if (updatedFields.status === 'Pending') {
+        endpoint = `/api/v1/kaizens/${id}/submit/`;
+        method = 'POST';
+        body = {};
+      }
+
+      const res = await fetch(endpoint, {
+        method,
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(updatedFields)
+        body: JSON.stringify(body)
       });
       const data = await res.json();
+      
       if (data.success) {
-        setKaizens(prev => prev.map(k => k.id === id ? data.data : k));
-        if (inspectKaizen?.id === id) setInspectKaizen(data.data);
+        fetchAllData(); // Refresh list to get accurate status/classification from backend
+        if (inspectKaizen?.id === id) setInspectKaizen({ ...inspectKaizen, ...updatedFields });
       }
     } catch (err) {
       console.error('Error updating Kaizen:', err);
