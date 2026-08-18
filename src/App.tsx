@@ -148,53 +148,63 @@ export default function App() {
     };
   };
 
+  // Helper to safely fetch JSON without throwing on HTML 404s
+  const fetchJsonSafe = async (url: string) => {
+    try {
+      const res = await fetch(url);
+      if (!res.ok) return null;
+      const contentType = res.headers.get('content-type');
+      if (contentType && contentType.includes('application/json')) {
+        return await res.json();
+      }
+      return null;
+    } catch {
+      return null;
+    }
+  };
+
   // Fetch all shopfloor modules data
   const fetchAllData = async () => {
     try {
       setIsLoading(true);
       
       // Fetch Kaizens from Django Backend
-      const resK = await fetch('/api/v1/kaizens/');
-      const dataK = await resK.json();
-      let rawList: any[] = [];
-      if (dataK.results && Array.isArray(dataK.results)) {
-        rawList = dataK.results;
-      } else if (dataK.data && Array.isArray(dataK.data)) {
-        rawList = dataK.data;
-      } else if (Array.isArray(dataK)) {
-        rawList = dataK;
+      const dataK = await fetchJsonSafe('/api/v1/kaizens/');
+      if (dataK) {
+        let rawList: any[] = [];
+        if (dataK.results && Array.isArray(dataK.results)) {
+          rawList = dataK.results;
+        } else if (dataK.data && Array.isArray(dataK.data)) {
+          rawList = dataK.data;
+        } else if (Array.isArray(dataK)) {
+          rawList = dataK;
+        }
+        setKaizens(rawList.map(normalizeKaizen));
       }
-      setKaizens(rawList.map(normalizeKaizen));
 
       // Fetch Redflags
-      const resR = await fetch('/api/redflags');
-      const dataR = await resR.json();
-      if (dataR.success) setRedFlags(dataR.data);
+      const dataR = await fetchJsonSafe('/api/redflags');
+      if (dataR?.success && Array.isArray(dataR.data)) setRedFlags(dataR.data);
 
       // Fetch 5S Audits
-      const resF = await fetch('/api/fivesaudits');
-      const dataF = await resF.json();
-      if (dataF.success) setFiveSAudits(dataF.data);
+      const dataF = await fetchJsonSafe('/api/fivesaudits');
+      if (dataF?.success && Array.isArray(dataF.data)) setFiveSAudits(dataF.data);
 
       // Fetch Safety Incidents
-      const resS = await fetch('/api/safetyincidents');
-      const dataS = await resS.json();
-      if (dataS.success) setSafetyIncidents(dataS.data);
+      const dataS = await fetchJsonSafe('/api/safetyincidents');
+      if (dataS?.success && Array.isArray(dataS.data)) setSafetyIncidents(dataS.data);
 
       // Fetch PPSRs
-      const resP = await fetch('/api/ppsrreports');
-      const dataP = await resP.json();
-      if (dataP.success) setPpsrReports(dataP.data);
+      const dataP = await fetchJsonSafe('/api/ppsrreports');
+      if (dataP?.success && Array.isArray(dataP.data)) setPpsrReports(dataP.data);
 
       // Fetch PPSR Meetings
-      const resM = await fetch('/api/ppsrmeetings');
-      const dataM = await resM.json();
-      if (dataM.success) setPpsrMeetings(dataM.data);
+      const dataM = await fetchJsonSafe('/api/ppsrmeetings');
+      if (dataM?.success && Array.isArray(dataM.data)) setPpsrMeetings(dataM.data);
 
       // Fetch Open Impact Actions
-      const resI = await fetch('/api/impactactions');
-      const dataI = await resI.json();
-      if (dataI.success) setImpactActions(dataI.data);
+      const dataI = await fetchJsonSafe('/api/impactactions');
+      if (dataI?.success && Array.isArray(dataI.data)) setImpactActions(dataI.data);
 
     } catch (err) {
       console.error('Error loading SFMS data from backend:', err);

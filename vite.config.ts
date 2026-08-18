@@ -14,9 +14,20 @@ export default defineConfig(() => {
     server: {
       port: 5173,
       proxy: {
-        // Proxy all /api/* requests to the Django backend
-        '/api': {
+        // Proxy Django REST API & media endpoints
+        '/api/v1': {
           target: 'http://127.0.0.1:8000',
+          changeOrigin: true,
+          secure: false,
+        },
+        '/media': {
+          target: 'http://127.0.0.1:8000',
+          changeOrigin: true,
+          secure: false,
+        },
+        // Proxy local Express mock routes (redflags, fivesaudits, etc.)
+        '/api': {
+          target: 'http://localhost:3000',
           changeOrigin: true,
           secure: false,
         },
