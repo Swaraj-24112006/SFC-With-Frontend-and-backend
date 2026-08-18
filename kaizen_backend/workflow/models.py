@@ -34,7 +34,9 @@ class WorkflowHistory(models.Model):
     performed_by = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         on_delete=models.PROTECT,
-        related_name='workflow_actions'
+        related_name='workflow_actions',
+        null=True,
+        blank=True
     )
     remarks = models.TextField(blank=True, help_text='Reviewer remarks or rejection reason')
     performed_at = models.DateTimeField(auto_now_add=True)
