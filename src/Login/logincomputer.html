@@ -1,0 +1,309 @@
+<!DOCTYPE html>
+<html class="dark" lang="en" style="">
+
+<head>
+    <meta charset="utf-8">
+    <meta content="width=device-width, initial-scale=1.0" name="viewport">
+    <title>KSPG Kocpit - Login</title>
+    <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+    <link
+        href="https://fonts.googleapis.com/css2?family=Hanken+Grotesk:wght@400;600&amp;family=JetBrains+Mono:wght@500&amp;family=Manrope:wght@600;700&amp;display=swap"
+        rel="stylesheet">
+    <link
+        href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap"
+        rel="stylesheet">
+    <link
+        href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap"
+        rel="stylesheet">
+    <script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    "colors": {
+                        "primary": "#bac3ff",
+                        "surface-bright": "#373a3b",
+                        "inverse-primary": "#4557b2",
+                        "on-secondary-fixed-variant": "#005231",
+                        "surface-tint": "#bac3ff",
+                        "on-surface": "#e1e3e4",
+                        "tertiary-fixed": "#e1e0ff",
+                        "on-surface-variant": "#c5c5d4",
+                        "surface-dim": "#111415",
+                        "surface-container-lowest": "#0c0f10",
+                        "on-primary-container": "#021c7c",
+                        "primary-fixed-dim": "#bac3ff",
+                        "on-error": "#690005",
+                        "primary-container": "#798ae9",
+                        "error-container": "#93000a",
+                        "on-secondary-fixed": "#002111",
+                        "on-tertiary-fixed-variant": "#404272",
+                        "secondary": "#46f6a5",
+                        "surface-container-highest": "#333536",
+                        "on-primary-fixed": "#00105a",
+                        "tertiary": "#c0c2fa",
+                        "surface": "#111415",
+                        "outline": "#8f909d",
+                        "background": "#111415",
+                        "on-secondary": "#003921",
+                        "on-tertiary-fixed": "#141644",
+                        "tertiary-fixed-dim": "#c0c2fa",
+                        "on-error-container": "#ffdad6",
+                        "primary-fixed": "#dee0ff",
+                        "on-tertiary-container": "#222552",
+                        "on-primary-fixed-variant": "#2c3e99",
+                        "inverse-surface": "#e1e3e4",
+                        "surface-variant": "#333536",
+                        "inverse-on-surface": "#2e3132",
+                        "surface-container-high": "#282a2b",
+                        "on-tertiary": "#292c5a",
+                        "outline-variant": "#454652",
+                        "on-background": "#e1e3e4",
+                        "on-secondary-container": "#005936",
+                        "tertiary-container": "#8a8cc1",
+                        "surface-container-low": "#191c1d",
+                        "secondary-fixed": "#52ffad",
+                        "error": "#ffb4ab",
+                        "secondary-fixed-dim": "#23e293",
+                        "secondary-container": "#04d98b",
+                        "on-primary": "#0f2482",
+                        "surface-container": "#1d2021"
+                    },
+                    "borderRadius": {
+                        "DEFAULT": "0.125rem",
+                        "lg": "0.25rem",
+                        "xl": "0.5rem",
+                        "full": "0.75rem"
+                    },
+                    "spacing": {
+                        "container-padding": "2rem",
+                        "section-gap": "2.5rem",
+                        "unit": "4px",
+                        "stack-gap": "1rem",
+                        "gutter": "1.5rem"
+                    },
+                    "fontFamily": {
+                        "body-md": ["Hanken Grotesk"],
+                        "label-caps": ["JetBrains Mono"],
+                        "headline-lg": ["Manrope"],
+                        "headline-lg-mobile": ["Manrope"],
+                        "button": ["Hanken Grotesk"],
+                        "body-sm": ["Hanken Grotesk"],
+                        "headline-xl": ["Manrope"]
+                    },
+                    "fontSize": {
+                        "body-md": ["16px", { "lineHeight": "24px", "fontWeight": "400" }],
+                        "label-caps": ["12px", { "lineHeight": "16px", "letterSpacing": "0.1em", "fontWeight": "500" }],
+                        "headline-lg": ["32px", { "lineHeight": "40px", "letterSpacing": "-0.01em", "fontWeight": "600" }],
+                        "headline-lg-mobile": ["24px", { "lineHeight": "32px", "fontWeight": "600" }],
+                        "button": ["14px", { "lineHeight": "20px", "letterSpacing": "0.02em", "fontWeight": "600" }],
+                        "body-sm": ["14px", { "lineHeight": "20px", "fontWeight": "400" }],
+                        "headline-xl": ["48px", { "lineHeight": "56px", "letterSpacing": "-0.02em", "fontWeight": "700" }]
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        body {
+            background-color: #101240;
+            color: #e1e3e4;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .bg-level-1 {
+            background-color: rgba(24, 30, 64, 0.85);
+            backdrop-filter: blur(12px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .input-mission-control {
+            background-color: #101240;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            color: #F0F1F2;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        .input-mission-control:focus {
+            border-color: #6A7BD9;
+            box-shadow: inset 0 0 8px rgba(106, 123, 217, 0.3);
+            outline: none;
+        }
+
+        .btn-primary {
+            background-color: #6A7BD9;
+            color: #F0F1F2;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        .btn-primary:hover {
+            box-shadow: 0 0 0 2px rgba(106, 123, 217, 0.5);
+            background-color: #5c6bc2;
+        }
+
+        .btn-ghost {
+            color: rgba(240, 241, 242, 0.7);
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        .btn-ghost:hover {
+            color: rgba(240, 241, 242, 1);
+        }
+
+        .card-accent-top {
+            border-top: 4px solid #6A7BD9;
+        }
+    </style>
+</head>
+
+<body
+    class="font-body-md text-body-md antialiased relative overflow-x-hidden selection:bg-primary-container selection:text-on-primary-container">
+    <!-- Abstract Background Elements to simulate a cockpit environment without images -->
+    <div class="fixed inset-0 pointer-events-none z-[-1] overflow-hidden">
+        <div class="absolute top-[20%] left-[10%] w-[500px] h-[500px] rounded-full bg-primary-container/5 blur-[120px]">
+        </div>
+        <div
+            class="absolute bottom-[10%] right-[10%] w-[600px] h-[600px] rounded-full bg-secondary-container/5 blur-[150px]">
+        </div>
+        <!-- Grid overlay -->
+        <div
+            class="absolute inset-0 bg-[linear-gradient(rgba(255,255,255,0.02)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.02)_1px,transparent_1px)] bg-[size:40px_40px] opacity-20">
+        </div>
+    </div>
+    <!-- TopNavBar component (Transaction intent, no navigation shell items required as per logic, just brand) -->
+    <header
+        class="w-full top-0 bg-surface dark:bg-surface bg-surface-container-lowest border-b border-white/10 shadow-sm z-50">
+        <div class="flex justify-between items-center px-gutter py-4 w-full max-w-[1200px] mx-auto">
+            <div class="flex items-center gap-2">
+                <span class="material-symbols-outlined text-primary text-2xl"
+                    style="font-variation-settings: 'FILL' 1;">rocket_launch</span>
+                <span
+                    class="font-headline-lg text-headline-lg font-bold text-primary tracking-tight hidden md:block">KSPG
+                    Cockpit</span>
+                <span
+                    class="font-headline-lg-mobile text-headline-lg-mobile font-bold text-primary tracking-tight md:hidden">KSPG
+                    Cockpit</span>
+            </div>
+            <div class="flex items-center">
+                <a class="font-button text-button text-primary hover:bg-white/5 transition-all duration-200 active:scale-95 transition-transform px-4 py-2 rounded"
+                    href="#">
+                    Sign Up
+                </a>
+            </div>
+        </div>
+    </header>
+    <!-- Main Content Canvas -->
+    <main class="flex-grow flex items-center justify-center p-4 md:p-8">
+        <!-- Login Card -->
+        <div
+            class="bg-level-1 card-accent-top rounded-xl w-full max-w-md p-8 md:p-10 shadow-2xl relative overflow-hidden">
+            <!-- Subtle decorative element inside card -->
+            <div class="absolute top-0 right-0 w-32 h-32 bg-primary/5 rounded-bl-full pointer-events-none"></div>
+            <div class="text-center mb-10 relative z-10">
+                <div
+                    class="inline-flex items-center justify-center w-16 h-16 rounded-full bg-[#101240] border border-white/10 mb-6 shadow-inner">
+                    <span class="material-symbols-outlined text-[#04D98B] text-3xl pulse-status">lock_person</span>
+                </div>
+                <h1 class="font-headline-lg text-headline-lg font-bold text-on-background tracking-tight mb-2">SYSTEM
+                    LOGIN</h1>
+                <p class="font-body-sm text-body-sm text-on-surface-variant uppercase tracking-wider">Mission Control
+                    Authentication</p>
+            </div>
+            <form class="space-y-6 relative z-10">
+                <div class="space-y-2">
+                    <label
+                        class="block font-label-caps text-label-caps text-on-surface-variant uppercase tracking-wider"
+                        for="username">Username</label>
+                    <div class="relative">
+                        <span
+                            class="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-on-surface-variant/50">person</span>
+                        <input
+                            class="input-mission-control w-full rounded-lg py-3 pl-10 pr-4 font-body-md text-body-md focus:ring-0 text-on-primary-container"
+                            id="username" name="username" placeholder="Enter identification" type="text">
+                    </div>
+                </div>
+                <div class="space-y-2">
+                    <div class="flex justify-between items-center">
+                        <label
+                            class="block font-label-caps text-label-caps text-on-surface-variant uppercase tracking-wider"
+                            for="password">Passcode</label>
+                        <a class="font-label-caps text-label-caps text-primary hover:text-primary-fixed transition-colors"
+                            href="#">Forgot?</a>
+                    </div>
+                    <div class="relative">
+                        <span
+                            class="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-on-surface-variant/50">key</span>
+                        <input
+                            class="input-mission-control w-full rounded-lg py-3 pl-10 pr-4 font-body-md text-body-md focus:ring-0 text-on-primary-container"
+                            id="password" name="password" placeholder="••••••••" type="password">
+                    </div>
+                </div>
+                <div class="pt-4">
+                    <button
+                        class="btn-primary w-full rounded-lg py-3 font-button text-button uppercase tracking-wider flex items-center justify-center gap-2 active:scale-95 transition-transform"
+                        type="submit">
+                        <span class="">Initialize Sequence</span>
+                        <span class="material-symbols-outlined text-sm">arrow_forward</span>
+                    </button>
+                </div>
+            </form>
+            <div class="mt-8 pt-6 border-t border-white/10 text-center relative z-10">
+                <p class="font-body-sm text-body-sm text-on-surface-variant">
+                    Require clearance?
+                    <a class="text-primary hover:text-primary-fixed font-button text-button transition-colors ml-1"
+                        href="#">Create Account</a>
+                </p>
+            </div>
+        </div>
+    </main>
+    <!-- Footer component -->
+    <footer class="w-full bottom-0 bg-transparent">
+        <div
+            class="flex flex-col md:flex-row justify-between items-center px-gutter py-8 w-full max-w-[1200px] mx-auto opacity-60">
+            <div
+                class="font-label-caps text-label-caps text-on-surface-variant mb-4 md:mb-0 text-center md:text-left uppercase tracking-wider">
+                © 2024 KSPG Cockpit. Mission Control Systems.</div>
+            <div class="flex flex-wrap justify-center gap-6">
+                <a class="font-body-sm text-body-sm text-on-surface-variant hover:text-secondary transition-colors transition-opacity duration-300"
+                    href="#">
+                    Privacy Policy
+                </a>
+                <a class="font-body-sm text-body-sm text-on-surface-variant hover:text-secondary transition-colors transition-opacity duration-300"
+                    href="#">
+                    Terms of Service
+                </a>
+                <a class="font-body-sm text-body-sm text-on-surface-variant hover:text-secondary transition-colors transition-opacity duration-300 flex items-center gap-1"
+                    href="#">
+                    <span class="w-2 h-2 rounded-full bg-[#04D98B] inline-block animate-pulse"></span>
+                    System Status
+                </a>
+            </div>
+        </div>
+    </footer>
+    <script>
+        // Micro-interaction for input fields
+        const inputs = document.querySelectorAll('input');
+        inputs.forEach(input => {
+            input.addEventListener('focus', function () {
+                const icon = this.previousElementSibling;
+                if (icon && icon.classList.contains('material-symbols-outlined')) {
+                    icon.style.color = '#6A7BD9';
+                }
+            });
+            input.addEventListener('blur', function () {
+                const icon = this.previousElementSibling;
+                if (icon && icon.classList.contains('material-symbols-outlined')) {
+                    icon.style.color = 'rgba(197, 197, 212, 0.5)'; // text-on-surface-variant/50
+                }
+            });
+        });
+    </script>
+
+
+
+
+</body>
+
+</html>
