@@ -1,0 +1,29 @@
+# Django Core
+Django==5.1.9
+djangorestframework==3.16.0
+django-cors-headers==4.7.0
+django-filter==25.1
+
+# Authentication
+djangorestframework-simplejwt==5.5.0
+
+# Database
+psycopg2-binary==2.9.10
+
+# Environment Configuration
+python-decouple==3.8
+
+# Image Handling
+Pillow==11.2.1
+
+# Export Libraries
+openpyxl==3.1.5
+reportlab==4.4.0
+
+# Production Server
+gunicorn==23.0.0
+
+# Object Storage (MinIO / S3) — currently unused, ready for production
+boto3
+django-storages
+minio
