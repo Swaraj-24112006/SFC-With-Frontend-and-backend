@@ -7,6 +7,10 @@ django-filter==25.1
 # Authentication
 djangorestframework-simplejwt==5.5.0
 
+# Redis — Session Store & Cache
+django-redis==5.4.0
+redis==5.2.1
+
 # Database
 psycopg2-binary==2.9.10
 

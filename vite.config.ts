@@ -19,6 +19,8 @@ export default defineConfig(() => {
           target: 'http://127.0.0.1:8000',
           changeOrigin: true,
           secure: false,
+          // Rewrite cookie domain so Set-Cookie reaches the browser correctly
+          cookieDomainRewrite: 'localhost',
         },
         '/media': {
           target: 'http://127.0.0.1:8000',

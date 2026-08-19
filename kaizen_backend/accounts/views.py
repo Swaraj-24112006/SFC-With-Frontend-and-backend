@@ -1,14 +1,16 @@
 """
-Accounts Views — Registration, Profile, User Management
+Accounts Views — Authentication, Profile, User Management
 """
 
 from rest_framework import generics, status, viewsets
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.permissions import AllowAny, IsAuthenticated
-from rest_framework_simplejwt.views import TokenObtainPairView, TokenRefreshView
 from rest_framework_simplejwt.tokens import RefreshToken
+from rest_framework_simplejwt.exceptions import TokenError
+from django.contrib.auth import authenticate
 from django.utils import timezone
+from django.conf import settings
 
 from .models import CustomUser, Role
 from .serializers import (
@@ -19,6 +21,150 @@ from .serializers import (
     RoleSerializer,
 )
 from .permissions import IsAdmin
+from core.redis_client import (
+    create_session,
+    delete_session,
+    delete_all_user_sessions,
+)
+
+# Name of the HttpOnly cookie carrying the Redis session ID
+SESSION_COOKIE_NAME = 'kspg_sid'
+
+
+class LoginView(generics.GenericAPIView):
+    """
+    POST /api/v1/auth/login/
+    ─────────────────────────
+    Authenticates the user, issues JWT tokens, and creates a Redis session.
+    Sets an HttpOnly, SameSite=Lax `kspg_sid` cookie containing the session ID.
+
+    Security measures:
+    - Session fixation: brand-new session ID on every login
+    - Concurrent sessions: max 5 per user (oldest auto-evicted via Redis)
+    - Generic error: never reveals which field (username or password) is wrong
+    """
+    permission_classes = [AllowAny]
+
+    def post(self, request):
+        username = request.data.get('username', '').strip()
+        password = request.data.get('password', '')
+
+        # ── Generic guard (never say which field is wrong) ────────────────────
+        if not username or not password:
+            return self._auth_failed()
+
+        # ── Authenticate against Django user model ─────────────────────────────
+        user = authenticate(request, username=username, password=password)
+        if user is None:
+            return self._auth_failed()
+
+        if not user.is_active:
+            return self._auth_failed()
+
+        # ── Issue JWT tokens ──────────────────────────────────────────────────
+        refresh = RefreshToken.for_user(user)
+        access_token = refresh.access_token
+        jti = str(access_token.get('jti', ''))
+
+        # ── Create Redis session (session fixation prevention: always new ID) ─
+        user_agent = request.META.get('HTTP_USER_AGENT', '')[:512]
+        session_id = create_session(
+            user_id=user.pk,
+            username=user.username,
+            user_agent=user_agent,
+            jti=jti,
+        )
+
+        # ── Update last login ─────────────────────────────────────────────────
+        CustomUser.objects.filter(pk=user.pk).update(
+            last_login=timezone.now(),
+            last_activity=timezone.now(),
+        )
+
+        # ── Build response ────────────────────────────────────────────────────
+        response_data = {
+            'success': True,
+            'data': {
+                'user': UserProfileSerializer(user).data,
+                'tokens': {
+                    'access': str(access_token),
+                    'refresh': str(refresh),
+                },
+            },
+        }
+
+        response = Response(response_data, status=status.HTTP_200_OK)
+
+        # ── Set HttpOnly session cookie ───────────────────────────────────────
+        cookie_age = getattr(settings, 'SESSION_COOKIE_AGE', 3600)
+        is_secure = getattr(settings, 'SESSION_COOKIE_SECURE', False)
+
+        response.set_cookie(
+            key=SESSION_COOKIE_NAME,
+            value=session_id,
+            max_age=cookie_age,
+            httponly=True,                  # Not accessible via JavaScript
+            secure=is_secure,               # True in HTTPS production
+            samesite='Lax',                 # Mitigates CSRF; works with CORS
+            path='/',
+        )
+
+        return response
+
+    @staticmethod
+    def _auth_failed():
+        """Generic 401 — never reveals which field is wrong."""
+        return Response(
+            {
+                'success': False,
+                'error': {
+                    'code': 'INVALID_CREDENTIALS',
+                    'message': 'Invalid username or password.',
+                    'details': {},
+                },
+            },
+            status=status.HTTP_401_UNAUTHORIZED,
+        )
+
+
+class LogoutView(generics.GenericAPIView):
+    """
+    POST /api/v1/auth/logout/
+    ─────────────────────────
+    Full session invalidation:
+    1. Deletes the Redis session record (immediate effect — cookie becomes worthless)
+    2. Blacklists the SimpleJWT refresh token (prevents token reuse)
+    3. Clears the kspg_sid cookie from the browser
+    """
+    permission_classes = [AllowAny]   # AllowAny so expired-token users can still log out
+
+    def post(self, request):
+        # ── 1. Delete Redis session ───────────────────────────────────────────
+        session_id = request.COOKIES.get(SESSION_COOKIE_NAME)
+        if session_id:
+            delete_session(session_id)
+
+        # ── 2. Blacklist refresh token ────────────────────────────────────────
+        refresh_token_str = request.data.get('refresh')
+        if refresh_token_str:
+            try:
+                token = RefreshToken(refresh_token_str)
+                token.blacklist()
+            except (TokenError, Exception):
+                pass    # Already invalid — that's fine
+
+        # ── 3. Clear the session cookie ───────────────────────────────────────
+        response = Response(
+            {'success': True, 'message': 'Logged out successfully.'},
+            status=status.HTTP_200_OK,
+        )
+        response.delete_cookie(
+            key=SESSION_COOKIE_NAME,
+            path='/',
+            samesite='Lax',
+        )
+
+        return response
 
 
 class RegisterView(generics.CreateAPIView):
@@ -34,10 +180,7 @@ class RegisterView(generics.CreateAPIView):
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         user = serializer.save()
-
-        # Generate tokens for the new user
         refresh = RefreshToken.for_user(user)
-
         return Response({
             'success': True,
             'message': 'Registration successful.',
@@ -49,34 +192,6 @@ class RegisterView(generics.CreateAPIView):
                 }
             }
         }, status=status.HTTP_201_CREATED)
-
-
-class LogoutView(generics.GenericAPIView):
-    """
-    POST /api/v1/auth/logout/
-    Blacklist the refresh token to log out.
-    """
-    permission_classes = [IsAuthenticated]
-
-    def post(self, request):
-        try:
-            refresh_token = request.data.get('refresh')
-            if refresh_token:
-                token = RefreshToken(refresh_token)
-                token.blacklist()
-            return Response({
-                'success': True,
-                'message': 'Logout successful.'
-            }, status=status.HTTP_200_OK)
-        except Exception:
-            return Response({
-                'success': False,
-                'error': {
-                    'code': 'INVALID_TOKEN',
-                    'message': 'Invalid or expired refresh token.',
-                    'details': {},
-                }
-            }, status=status.HTTP_400_BAD_REQUEST)
 
 
 class PasswordChangeView(generics.GenericAPIView):

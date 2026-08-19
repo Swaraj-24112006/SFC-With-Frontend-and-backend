@@ -236,7 +236,7 @@ export default function CftMonthlyAwards({
     if (categoryOverrides[k.id]) {
       return categoryOverrides[k.id];
     }
-    const mf = (k.miniFactory || k.minifactory || '').toUpperCase();
+    const mf = ((k as any).miniFactory || k.minifactory || '').toUpperCase();
     const loc = (k.location || '').toLowerCase();
     const area = (k.area || '').toLowerCase();
     const machine = (k.machine || '').toLowerCase();
@@ -245,7 +245,7 @@ export default function CftMonthlyAwards({
     if (mf.includes('MF2') || mf.includes('2') || area.includes('egr') || area.includes('mf2')) return 'MF2';
     if (mf.includes('MF3') || mf.includes('3') || area.includes('bpv') || area.includes('mf3')) return 'MF3';
     if (mf.includes('MACHIN') || area.includes('machin') || machine.includes('cnc') || machine.includes('grind') || machine.includes('mill')) return 'Machining';
-    if (mf.includes('QUAL') || area.includes('qual') || area.includes('cmm') || loc.includes('metrology') || k.classification === 'Good Point' || k.classification === 'good_point') return 'Quality';
+    if (mf.includes('QUAL') || area.includes('qual') || area.includes('cmm') || loc.includes('metrology') || k.classification === 'Good Point') return 'Quality';
     if (mf.includes('MAINT') || area.includes('maint') || area.includes('utilit') || machine.includes('conduit') || machine.includes('blower')) return 'Maintenance';
 
     return 'MF1';
@@ -752,7 +752,7 @@ export default function CftMonthlyAwards({
                       {/* SR No */}
                       <td className="p-2.5 border-r border-slate-200 font-mono">
                         <span className="font-bold text-slate-900 block">{k.srNo}</span>
-                        <span className="text-[10px] text-slate-400 block mt-0.5">{k.implementationDate || k.closingTargetDate}</span>
+                        <span className="text-[10px] text-slate-400 block mt-0.5">{(k as any).implementationDate || k.implementedDate || k.closingTargetDate}</span>
                         <button
                           type="button"
                           onClick={() => setInspectKaizen(k)}
@@ -772,7 +772,7 @@ export default function CftMonthlyAwards({
                           By: <strong className="text-slate-800">{k.ideaBy}</strong>
                         </div>
                         <span className="text-[10px] text-slate-400 font-mono block">
-                          Loc: {k.miniFactory || k.minifactory} • {k.location}
+                          Loc: {(k as any).miniFactory || k.minifactory} • {k.location}
                         </span>
                       </td>
 
@@ -947,7 +947,7 @@ export default function CftMonthlyAwards({
                                 rankLabel,
                                 kaizenTitle: w.title,
                                 winnerName: w.ideaBy,
-                                minifactory: `${w.miniFactory || w.minifactory} (${w.location})`,
+                                minifactory: `${(w as any).miniFactory || w.minifactory} (${w.location})`,
                                 costSaveText: w.costSave ? `${formatIndianRupees(w.costSave)} / year` : 'Verified Process Improvement',
                                 srNo: w.srNo,
                                 totalScore,
@@ -1109,7 +1109,7 @@ export default function CftMonthlyAwards({
               <div className="bg-slate-50 p-4 rounded-2xl border border-slate-200 space-y-2">
                 <h3 className="text-base font-black text-slate-900">[{inspectKaizen.srNo}] {inspectKaizen.title}</h3>
                 <p className="font-mono text-slate-600">
-                  Initiator: <strong className="text-slate-900">{inspectKaizen.ideaBy}</strong> | Location: <strong>{inspectKaizen.miniFactory || inspectKaizen.minifactory} ({inspectKaizen.location})</strong>
+                  Initiator: <strong className="text-slate-900">{inspectKaizen.ideaBy}</strong> | Location: <strong>{(inspectKaizen as any).miniFactory || inspectKaizen.minifactory} ({inspectKaizen.location})</strong>
                 </p>
               </div>
 

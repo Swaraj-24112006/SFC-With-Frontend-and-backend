@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { AuthUser, clearAuth, logout as authLogout } from './utils/auth';
 import Header from './components/Header';
 import Sidebar from './components/Sidebar';
 import PpsrSheetInspect from './components/PpsrSheetInspect';
@@ -13,8 +14,19 @@ import { Kaizen, UserPersona, RedFlag, FiveSAudit, SafetyIncident, PpsrReport, P
 import { Eye, X, Award, Lightbulb, Check, FileText, CheckCircle, HelpCircle, Printer, LayoutDashboard, Flag, Sparkles, ShieldAlert, Compass, Menu } from 'lucide-react';
 import { formatIndianRupees } from './utils';
 
-export default function App() {
+interface AppProps {
+  loggedInUser?: AuthUser | null;
+  onLogout?: () => void;
+}
+
+export default function App({ loggedInUser, onLogout }: AppProps = {}) {
   const [persona, setPersona] = useState<UserPersona>('manager');
+
+  // Logout handler — calls backend, clears tokens, returns to login screen
+  const handleLogout = async () => {
+    await authLogout();
+    onLogout?.();
+  };
   
   // Top Level Navigation Module Switcher
   const [activeModule, setActiveModule] = useState<'global-dashboard' | 'kaizen' | 'redflag' | 'fives' | 'safety' | 'ppsr' | 'cft-awards'>('global-dashboard');
@@ -609,6 +621,33 @@ export default function App() {
             </span>
           </div>
         )}
+
+        {/* Compact user info + logout bar — always visible at top of workspace */}
+        <div className="print:hidden shrink-0 bg-slate-900 text-white px-4 py-2 flex items-center justify-between border-b border-slate-800">
+          <div className="flex items-center space-x-2">
+            <div className="w-6 h-6 bg-emerald-500 rounded-full flex items-center justify-center text-[10px] font-black text-white uppercase">
+              {loggedInUser?.full_name?.[0] || loggedInUser?.username?.[0] || 'U'}
+            </div>
+            <div className="leading-none">
+              <span className="text-xs font-semibold text-slate-200">
+                {loggedInUser?.full_name || loggedInUser?.username || 'User'}
+              </span>
+              {loggedInUser?.employee_id && (
+                <span className="text-[10px] text-slate-500 font-mono ml-2">#{loggedInUser.employee_id}</span>
+              )}
+            </div>
+          </div>
+          <button
+            id="logout-btn"
+            type="button"
+            onClick={handleLogout}
+            className="flex items-center space-x-1.5 px-3 py-1 bg-slate-800 hover:bg-rose-900 border border-slate-700 hover:border-rose-700 rounded-lg text-[11px] font-semibold text-slate-300 hover:text-rose-300 transition-all duration-200 cursor-pointer"
+            title="Sign out"
+          >
+            <ShieldAlert className="w-3 h-3" />
+            <span>Logout</span>
+          </button>
+        </div>
 
         {/* Main Body content renderer */}
         <main className="flex-1 pb-16 print:hidden">

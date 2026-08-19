@@ -56,6 +56,8 @@ INSTALLED_APPS = [
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
     'corsheaders.middleware.CorsMiddleware',
+    # Redis-backed session validation — must be AFTER CORS so preflight passes
+    'core.session_middleware.SessionValidationMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
@@ -101,6 +103,56 @@ DATABASES = {
         'CONN_MAX_AGE': 600,
     }
 }
+
+# =============================================================================
+# Redis — Cache & Session Store
+# =============================================================================
+REDIS_HOST = config('REDIS_HOST', default='127.0.0.1')
+REDIS_PORT = config('REDIS_PORT', default=6379, cast=int)
+REDIS_USERNAME = config('REDIS_USERNAME', default='')
+REDIS_PASSWORD = config('REDIS_PASSWORD', default='')
+REDIS_DB = config('REDIS_DB', default=0, cast=int)
+
+_redis_user_pass = ''
+if REDIS_USERNAME and REDIS_PASSWORD:
+    _redis_user_pass = f'{REDIS_USERNAME}:{REDIS_PASSWORD}@'
+elif REDIS_PASSWORD:
+    _redis_user_pass = f':{REDIS_PASSWORD}@'
+
+REDIS_URL = f'redis://{_redis_user_pass}{REDIS_HOST}:{REDIS_PORT}/{REDIS_DB}'
+
+CACHES = {
+    'default': {
+        'BACKEND': 'django_redis.cache.RedisCache',
+        'LOCATION': REDIS_URL,
+        'OPTIONS': {
+            'CLIENT_CLASS': 'django_redis.client.DefaultClient',
+            'SOCKET_CONNECT_TIMEOUT': 5,
+            'SOCKET_TIMEOUT': 5,
+            'RETRY_ON_TIMEOUT': True,
+            'MAX_CONNECTIONS': 20,
+            'CONNECTION_POOL_KWARGS': {'max_connections': 20},
+        },
+        'KEY_PREFIX': 'kspg_cache',
+    }
+}
+
+# =============================================================================
+# Session Security — Redis-backed with HttpOnly / SameSite cookies
+# =============================================================================
+SESSION_COOKIE_AGE = config('SESSION_COOKIE_AGE', default=3600, cast=int)  # 60 min
+MAX_CONCURRENT_SESSIONS = config('MAX_CONCURRENT_SESSIONS', default=5, cast=int)
+
+# Cookie security flags
+SESSION_COOKIE_NAME = 'kspg_session'
+SESSION_COOKIE_HTTPONLY = True           # Not accessible via JavaScript
+SESSION_COOKIE_SAMESITE = 'Lax'         # Prevents CSRF while allowing normal navigation
+SESSION_COOKIE_SECURE = not DEBUG        # True in production (HTTPS), False in dev (HTTP)
+SESSION_COOKIE_PATH = '/'
+SESSION_SAVE_EVERY_REQUEST = False       # We manage TTL manually in middleware
+
+# KSPG custom session cookie name (used by SessionValidationMiddleware)
+KSPG_SESSION_COOKIE_NAME = 'kspg_sid'
 
 # =============================================================================
 # Auth
