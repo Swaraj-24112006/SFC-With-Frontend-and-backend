@@ -74,7 +74,7 @@ export interface Kaizen {
   preparedBy: string;
   approvedBy: string;
   verifiedBy: string;
-  status: 'Pending' | 'Approved' | 'Good Point' | 'Rejected';
+  status: 'Draft' | 'Pending' | 'Approved' | 'Good Point' | 'Rejected';
   classification: 'Kaizen' | 'Good Point' | 'Pending' | 'None';
   remark: string;
   photoBefore?: string; // Raw storage key (from backend) or base64 (local preview only)

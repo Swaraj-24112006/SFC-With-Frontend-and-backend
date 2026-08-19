@@ -6,15 +6,25 @@ import KaizenSpreadsheet from '../components/KaizenSpreadsheet';
 import CftMonthlyAwards from '../components/CftMonthlyAwards';
 import OpenImpactTracker from '../components/OpenImpactTracker';
 import KaizenProcessFlowchart from '../components/KaizenProcessFlowchart';
+import MyDrafts from '../components/MyDrafts';
+import AccessDenied from '../components/AccessDenied';
 import { Kaizen, PpsrReport, OpenImpactAction, UserPersona } from '../types';
+import { RoleCategory, KaizenSubTab, canAccessTab } from '../utils/rbac';
 
 interface KaizenModuleProps {
-  activeTab: 'dashboard' | 'form' | 'committee' | 'list' | 'cft-awards' | 'impact-tracker' | 'process-flowchart';
-  setActiveTab: (tab: 'dashboard' | 'form' | 'committee' | 'list' | 'cft-awards' | 'impact-tracker' | 'process-flowchart') => void;
+  activeTab: KaizenSubTab;
+  setActiveTab: (tab: KaizenSubTab) => void;
   kaizens: Kaizen[];
+  drafts: Kaizen[];
+  editingDraft: Kaizen | null;
+  setEditingDraft: (draft: Kaizen | null) => void;
   ppsrReports: PpsrReport[];
   impactActions: OpenImpactAction[];
-  onAddKaizen: (kaizen: Partial<Kaizen>) => void;
+  userRole?: RoleCategory;
+  onAddKaizen: (kaizen: Partial<Kaizen> & { photoBeforeFile?: File; photoAfterFile?: File }) => void;
+  onSaveDraft: (draft: Partial<Kaizen> & { photoBeforeFile?: File; photoAfterFile?: File }) => void;
+  onSubmitKaizen: (kaizen: Partial<Kaizen> & { photoBeforeFile?: File; photoAfterFile?: File }) => void;
+  onDeleteDraft: (id: string) => void;
   onUpdateKaizen: (id: string, updatedFields: Partial<Kaizen>) => void;
   onAddImpactAction: (action: Partial<OpenImpactAction>) => void;
   onUpdateImpactAction: (id: string, updates: Partial<OpenImpactAction>) => void;
@@ -28,9 +38,16 @@ export default function KaizenModule({
   activeTab,
   setActiveTab,
   kaizens,
+  drafts,
+  editingDraft,
+  setEditingDraft,
   ppsrReports,
   impactActions,
+  userRole = 'initiator',
   onAddKaizen,
+  onSaveDraft,
+  onSubmitKaizen,
+  onDeleteDraft,
   onUpdateKaizen,
   onAddImpactAction,
   onUpdateImpactAction,
@@ -39,16 +56,57 @@ export default function KaizenModule({
   onSelectKaizen,
   handleSetPersona
 }: KaizenModuleProps) {
+  // If activeTab is forbidden for current role, show AccessDenied immediately
+  if (!canAccessTab(userRole, 'kaizen', activeTab)) {
+    const tabLabels: Record<string, string> = {
+      'form': 'Log New Kaizen',
+      'drafts': 'My Drafts',
+      'committee': 'Committee Review',
+      'impact-tracker': 'Impact Point & Closure',
+      'list': 'Spreadsheet Register',
+    };
+    return (
+      <AccessDenied
+        userRole={userRole}
+        attemptedSection={tabLabels[activeTab] || activeTab}
+        onNavigateHome={() => setActiveTab('dashboard')}
+        onNavigateKaizen={() => setActiveTab('dashboard')}
+      />
+    );
+  }
+
   return (
     <div className="space-y-1">
       {activeTab === 'dashboard' && (
         <Dashboard
           kaizens={kaizens}
           onSelectKaizen={onSelectKaizen}
+          userRole={userRole}
           onNavigateToTab={(tab) => {
-            if (tab === 'form') handleSetPersona('operator');
-            else if (tab === 'committee') handleSetPersona('committee');
-            else setActiveTab(tab as any);
+            if (canAccessTab(userRole, 'kaizen', tab as any)) {
+              if (tab === 'form') {
+                setEditingDraft(null);
+                handleSetPersona('operator');
+              } else if (tab === 'committee') {
+                handleSetPersona('committee');
+              }
+              setActiveTab(tab as any);
+            }
+          }}
+        />
+      )}
+
+      {activeTab === 'drafts' && (
+        <MyDrafts
+          drafts={drafts}
+          onContinueEditing={(draft) => {
+            setEditingDraft(draft);
+            setActiveTab('form');
+          }}
+          onDeleteDraft={onDeleteDraft}
+          onStartNew={() => {
+            setEditingDraft(null);
+            setActiveTab('form');
           }}
         />
       )}
@@ -74,8 +132,14 @@ export default function KaizenModule({
       {activeTab === 'form' && (
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
           <KaizenSheetForm
+            initialData={editingDraft}
             onAddKaizen={onAddKaizen}
-            onCancel={() => setActiveTab('dashboard')}
+            onSaveDraft={onSaveDraft}
+            onSubmitKaizen={onSubmitKaizen}
+            onCancel={() => {
+              setEditingDraft(null);
+              setActiveTab('dashboard');
+            }}
           />
         </div>
       )}

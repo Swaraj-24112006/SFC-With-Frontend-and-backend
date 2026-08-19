@@ -13,6 +13,7 @@ import CftAwardsModule from './modules/CftAwardsModule';
 import { Kaizen, UserPersona, RedFlag, FiveSAudit, SafetyIncident, PpsrReport, PpsrMeetingLog, OpenImpactAction } from './types';
 import { Eye, X, Award, Lightbulb, Check, FileText, CheckCircle, HelpCircle, Printer, LayoutDashboard, Flag, Sparkles, ShieldAlert, Compass, Menu } from 'lucide-react';
 import { formatIndianRupees } from './utils';
+import { RoleCategory, KaizenSubTab, canAccessTab, getRoleBadge } from './utils/rbac';
 
 interface AppProps {
   loggedInUser?: AuthUser | null;
@@ -32,13 +33,24 @@ export default function App({ loggedInUser, onLogout }: AppProps = {}) {
   const [activeModule, setActiveModule] = useState<'global-dashboard' | 'kaizen' | 'redflag' | 'fives' | 'safety' | 'ppsr' | 'cft-awards'>('global-dashboard');
   
   // Kaizen internal tab state
-  const [activeTab, setActiveTab] = useState<'dashboard' | 'form' | 'committee' | 'list' | 'cft-awards' | 'impact-tracker' | 'process-flowchart'>('dashboard');
+  const [activeTab, setActiveTab] = useState<KaizenSubTab>('dashboard');
+
+  const userRole: RoleCategory = loggedInUser?.role_category || 'initiator';
+
+  // Auto-guard activeTab on userRole change or initial load
+  useEffect(() => {
+    if (activeModule === 'kaizen' && !canAccessTab(userRole, 'kaizen', activeTab)) {
+      setActiveTab('dashboard');
+    }
+  }, [userRole, activeModule, activeTab]);
 
   // Mobile drawer state
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
 
   // Master States
   const [kaizens, setKaizens] = useState<Kaizen[]>([]);
+  const [drafts, setDrafts] = useState<Kaizen[]>([]);
+  const [editingDraft, setEditingDraft] = useState<Kaizen | null>(null);
   const [redFlags, setRedFlags] = useState<RedFlag[]>([]);
   const [fiveSAudits, setFiveSAudits] = useState<FiveSAudit[]>([]);
   const [safetyIncidents, setSafetyIncidents] = useState<SafetyIncident[]>([]);
@@ -105,11 +117,12 @@ export default function App({ loggedInUser, onLogout }: AppProps = {}) {
   // Helper to normalize Kaizens from backend into strict frontend types
   const normalizeKaizen = (k: any): Kaizen => {
     const rawStatus = (k.status || '').toLowerCase().trim();
-    let normalizedStatus: 'Pending' | 'Approved' | 'Good Point' | 'Rejected' = 'Pending';
-    if (rawStatus === 'approved') normalizedStatus = 'Approved';
+    let normalizedStatus: 'Draft' | 'Pending' | 'Approved' | 'Good Point' | 'Rejected' = 'Pending';
+    if (rawStatus === 'draft') normalizedStatus = 'Draft';
+    else if (rawStatus === 'approved') normalizedStatus = 'Approved';
     else if (rawStatus === 'good_point' || rawStatus === 'good point') normalizedStatus = 'Good Point';
     else if (rawStatus === 'rejected') normalizedStatus = 'Rejected';
-    else normalizedStatus = 'Pending'; // 'draft', 'submitted', 'pending', 'rework'
+    else normalizedStatus = 'Pending'; // 'submitted', 'pending', 'rework'
 
     const rawClass = (k.classification || '').toLowerCase().trim();
     let normalizedClass: 'Kaizen' | 'Good Point' | 'Pending' | 'None' = 'Pending';
@@ -194,6 +207,18 @@ export default function App({ loggedInUser, onLogout }: AppProps = {}) {
         setKaizens(rawList.map(normalizeKaizen));
       }
 
+      // Fetch Saved Drafts
+      const dataD = await fetchJsonSafe('/api/v1/kaizens/drafts/');
+      if (dataD) {
+        let rawDrafts: any[] = [];
+        if (dataD.data && Array.isArray(dataD.data)) {
+          rawDrafts = dataD.data;
+        } else if (Array.isArray(dataD)) {
+          rawDrafts = dataD;
+        }
+        setDrafts(rawDrafts.map(normalizeKaizen));
+      }
+
       // Fetch Redflags
       const dataR = await fetchJsonSafe('/api/redflags');
       if (dataR?.success && Array.isArray(dataR.data)) setRedFlags(dataR.data);
@@ -229,10 +254,109 @@ export default function App({ loggedInUser, onLogout }: AppProps = {}) {
     fetchAllData();
   }, []);
 
-  // Post Kaizen — translate camelCase frontend fields → snake_case Django fields
-  const handleAddKaizen = async (newKaizen: Partial<Kaizen> & { photoBeforeFile?: File; photoAfterFile?: File }) => {
+  // 1. SAVE DRAFT — Partial validation allowed, auto-timestamps, keeps in draft state
+  const handleSaveDraft = async (draftData: Partial<Kaizen> & { photoBeforeFile?: File; photoAfterFile?: File }) => {
     try {
-      // Map frontend camelCase keys to Django snake_case keys
+      const djangoPayload: Record<string, any> = {
+        title: draftData.title || 'Untitled Kaizen Draft',
+        month: draftData.month || new Date().toLocaleString('en-US', { month: 'long' }),
+        suggestion_date: draftData.suggestionDate || new Date().toISOString().split('T')[0],
+        problem_before: draftData.problemBefore || '',
+        counter_measure_after: draftData.counterMeasureAfter || '',
+        area: draftData.area || '',
+        mini_factory: draftData.minifactory || '',
+        location: draftData.location || '',
+        machine: draftData.machine || '',
+        closing_target_date: draftData.closingTargetDate || null,
+        implementation_date: draftData.implementedDate || null,
+        cost_save: draftData.costSave ?? 0,
+        idea_by: draftData.ideaBy || '',
+        implemented_by: draftData.implementedBy || '',
+        prepared_by: draftData.preparedBy || '',
+        remark: draftData.remark || '',
+        result: draftData.result || '',
+        status: 'draft',
+        classification: 'pending',
+      };
+
+      if (draftData.benefits) {
+        djangoPayload.benefits = {
+          productivity: Boolean(draftData.benefits.p),
+          quality: Boolean(draftData.benefits.q),
+          cost: Boolean(draftData.benefits.c),
+          delivery: Boolean(draftData.benefits.d),
+          safety: Boolean(draftData.benefits.s),
+          morale: Boolean(draftData.benefits.m),
+        };
+      }
+
+      let kaizenId = draftData.id;
+      let res;
+
+      if (kaizenId) {
+        res = await fetch(`/api/v1/kaizens/${kaizenId}/`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(djangoPayload),
+        });
+      } else {
+        res = await fetch('/api/v1/kaizens/', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(djangoPayload),
+        });
+      }
+
+      const data = await res.json();
+      if (data.success || data.id) {
+        kaizenId = data.data?.id || data.id || kaizenId;
+
+        // Upload Before photo if a real file was selected
+        if (kaizenId && draftData.photoBeforeFile) {
+          try {
+            const formData = new FormData();
+            formData.append('photo_type', 'before');
+            formData.append('image', draftData.photoBeforeFile);
+            await fetch(`/api/v1/kaizens/${kaizenId}/upload-photo/`, {
+              method: 'POST',
+              body: formData,
+            });
+          } catch (photoErr) {
+            console.warn('Before photo upload failed (non-critical):', photoErr);
+          }
+        }
+
+        // Upload After photo if a real file was selected
+        if (kaizenId && draftData.photoAfterFile) {
+          try {
+            const formData = new FormData();
+            formData.append('photo_type', 'after');
+            formData.append('image', draftData.photoAfterFile);
+            await fetch(`/api/v1/kaizens/${kaizenId}/upload-photo/`, {
+              method: 'POST',
+              body: formData,
+            });
+          } catch (photoErr) {
+            console.warn('After photo upload failed (non-critical):', photoErr);
+          }
+        }
+
+        await fetchAllData();
+        const now = new Date().toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: true });
+        alert(`Draft "${draftData.title || 'Untitled'}" saved successfully at ${now}! You can continue editing anytime from My Drafts.`);
+      } else {
+        console.error('Save Draft failed:', data);
+        alert(`Error saving draft: ${JSON.stringify(data)}`);
+      }
+    } catch (err) {
+      console.error('Error saving draft:', err);
+      alert('Error saving draft.');
+    }
+  };
+
+  // 2. SUBMIT KAIZEN — Strict compulsory validation, status becomes submitted
+  const handleSubmitKaizen = async (newKaizen: Partial<Kaizen> & { photoBeforeFile?: File; photoAfterFile?: File }) => {
+    try {
       const djangoPayload: Record<string, any> = {
         title: newKaizen.title,
         month: newKaizen.month || new Date().toLocaleString('en-US', { month: 'long' }),
@@ -255,7 +379,6 @@ export default function App({ loggedInUser, onLogout }: AppProps = {}) {
         classification: 'pending',
       };
 
-      // Map benefits: {p,q,c,d,s,m} → {productivity, quality, cost, delivery, safety, morale}
       if (newKaizen.benefits) {
         djangoPayload.benefits = {
           productivity: Boolean(newKaizen.benefits.p),
@@ -264,23 +387,29 @@ export default function App({ loggedInUser, onLogout }: AppProps = {}) {
           delivery: Boolean(newKaizen.benefits.d),
           safety: Boolean(newKaizen.benefits.s),
           morale: Boolean(newKaizen.benefits.m),
-          p: Boolean(newKaizen.benefits.p),
-          q: Boolean(newKaizen.benefits.q),
-          c: Boolean(newKaizen.benefits.c),
-          d: Boolean(newKaizen.benefits.d),
-          s: Boolean(newKaizen.benefits.s),
-          m: Boolean(newKaizen.benefits.m),
         };
       }
 
-      const res = await fetch('/api/v1/kaizens/', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(djangoPayload),
-      });
+      let kaizenId = newKaizen.id;
+      let res;
+
+      if (kaizenId) {
+        res = await fetch(`/api/v1/kaizens/${kaizenId}/`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(djangoPayload),
+        });
+      } else {
+        res = await fetch('/api/v1/kaizens/', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(djangoPayload),
+        });
+      }
+
       const data = await res.json();
       if (data.success || data.id) {
-        const kaizenId = data.data?.id || data.id;
+        kaizenId = data.data?.id || data.id || kaizenId;
 
         // Upload Before photo if a real file was selected
         if (kaizenId && newKaizen.photoBeforeFile) {
@@ -312,19 +441,44 @@ export default function App({ loggedInUser, onLogout }: AppProps = {}) {
           }
         }
 
-        // Refresh list to get updated photo URLs from backend
-        fetchAllData();
+        // Refresh list to get updated data and remove from drafts
+        await fetchAllData();
+        setEditingDraft(null);
         setActiveTab('dashboard');
-        alert('Your Kaizen Sheet was successfully logged in the system! It is now pending committee review.');
+        alert('🎉 Your Kaizen Sheet was successfully submitted for committee review!');
       } else {
-        console.error('Kaizen POST failed:', data);
-        alert(`Error saving Kaizen: ${JSON.stringify(data)}`);
+        console.error('Kaizen submit failed:', data);
+        const errMsg = data.details ? Object.values(data.details).join('\n• ') : (data.message || JSON.stringify(data));
+        alert(`Cannot submit Kaizen:\n• ${errMsg}`);
       }
     } catch (err) {
-      console.error('Error adding Kaizen:', err);
-      alert('Error saving Kaizen.');
+      console.error('Error submitting Kaizen:', err);
+      alert('Error submitting Kaizen.');
     }
   };
+
+  // 3. DELETE DRAFT
+  const handleDeleteDraft = async (id: string) => {
+    try {
+      const res = await fetch(`/api/v1/kaizens/${id}/`, {
+        method: 'DELETE',
+      });
+      if (res.ok) {
+        setDrafts(prev => prev.filter(d => d.id !== id));
+        alert('Kaizen draft deleted successfully.');
+      } else {
+        const data = await res.json().catch(() => ({}));
+        alert(`Error deleting draft: ${data.message || res.statusText}`);
+      }
+    } catch (err) {
+      console.error('Error deleting draft:', err);
+      alert('Error deleting draft.');
+    }
+  };
+
+  // Alias for backward compatibility
+  const handleAddKaizen = handleSubmitKaizen;
+
 
   // Update Kaizen (Review / Audit / PQCDSM / Status / Cost Savings)
   const handleUpdateKaizen = async (id: string, updatedFields: Partial<Kaizen>) => {
@@ -594,6 +748,8 @@ export default function App({ loggedInUser, onLogout }: AppProps = {}) {
         persona={persona}
         setPersona={handleSetPersona}
         openRedflagsCount={openRedflagsCount}
+        draftsCount={drafts.length}
+        userRole={userRole}
         setInitialRedFlagAction={setInitialRedFlagAction}
         setInitialFiveSAction={setInitialFiveSAction}
         setInitialSafetyAction={setInitialSafetyAction}
@@ -624,17 +780,23 @@ export default function App({ loggedInUser, onLogout }: AppProps = {}) {
 
         {/* Compact user info + logout bar — always visible at top of workspace */}
         <div className="print:hidden shrink-0 bg-slate-900 text-white px-4 py-2 flex items-center justify-between border-b border-slate-800">
-          <div className="flex items-center space-x-2">
-            <div className="w-6 h-6 bg-emerald-500 rounded-full flex items-center justify-center text-[10px] font-black text-white uppercase">
+          <div className="flex items-center space-x-3">
+            <div className="w-7 h-7 bg-emerald-500 rounded-full flex items-center justify-center text-xs font-black text-white uppercase shadow-sm">
               {loggedInUser?.full_name?.[0] || loggedInUser?.username?.[0] || 'U'}
             </div>
-            <div className="leading-none">
-              <span className="text-xs font-semibold text-slate-200">
-                {loggedInUser?.full_name || loggedInUser?.username || 'User'}
+            <div className="leading-none flex items-center space-x-2">
+              <div>
+                <span className="text-xs font-bold text-slate-200">
+                  {loggedInUser?.full_name || loggedInUser?.username || 'User'}
+                </span>
+                {loggedInUser?.employee_id && (
+                  <span className="text-[10px] text-slate-500 font-mono ml-2">#{loggedInUser.employee_id}</span>
+                )}
+              </div>
+              <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border flex items-center space-x-1 ${getRoleBadge(userRole).colorClass}`}>
+                <span>{getRoleBadge(userRole).icon}</span>
+                <span>{getRoleBadge(userRole).label}</span>
               </span>
-              {loggedInUser?.employee_id && (
-                <span className="text-[10px] text-slate-500 font-mono ml-2">#{loggedInUser.employee_id}</span>
-              )}
             </div>
           </div>
           <button
@@ -702,9 +864,16 @@ export default function App({ loggedInUser, onLogout }: AppProps = {}) {
                 activeTab={activeTab}
                 setActiveTab={setActiveTab}
                 kaizens={kaizens}
+                drafts={drafts}
+                editingDraft={editingDraft}
+                setEditingDraft={setEditingDraft}
                 ppsrReports={ppsrReports}
                 impactActions={impactActions}
+                userRole={userRole}
                 onAddKaizen={handleAddKaizen}
+                onSaveDraft={handleSaveDraft}
+                onSubmitKaizen={handleSubmitKaizen}
+                onDeleteDraft={handleDeleteDraft}
                 onUpdateKaizen={handleUpdateKaizen}
                 onAddImpactAction={handleAddImpactAction}
                 onUpdateImpactAction={handleUpdateImpactAction}

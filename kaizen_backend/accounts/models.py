@@ -80,13 +80,39 @@ class CustomUser(AbstractUser):
         return f"{self.get_full_name()} ({self.employee_id})"
 
     @property
-    def role_name(self):
+    def role_name(self) -> str:
+        """Raw DB role name (e.g. 'initiator', 'kaizen_lead')."""
         return self.role.name if self.role else 'initiator'
 
-    def has_kaizen_permission(self, permission):
+    @property
+    def role_category(self) -> str:
+        """
+        Normalised RBAC category: 'initiator' | 'coordinator' | 'committee' | 'admin'.
+        This is what the frontend reads — never exposes internal DB role names.
+        """
+        from core.rbac import get_role_category
+        return get_role_category(self)
+
+    @property
+    def is_initiator(self) -> bool:
+        return self.role_category == 'initiator'
+
+    @property
+    def is_coordinator(self) -> bool:
+        return self.role_category == 'coordinator'
+
+    @property
+    def is_committee(self) -> bool:
+        return self.role_category == 'committee'
+
+    @property
+    def is_admin_role(self) -> bool:
+        return self.role_category == 'admin'
+
+    def has_kaizen_permission(self, permission: str) -> bool:
         """Check if user has a specific Kaizen permission via their role."""
-        if not self.role:
-            return False
-        if self.role.name == 'admin':
+        from core.rbac import get_role_category, ROLE_ADMIN, ROLE_PERMISSIONS
+        category = get_role_category(self)
+        if category == ROLE_ADMIN or self.is_superuser or self.is_staff:
             return True
-        return self.role.permissions.get(permission, False)
+        return ROLE_PERMISSIONS.get(category, {}).get(permission, False)

@@ -24,6 +24,13 @@ from .filters import KaizenFilter
 from .validators import validate_kaizen_for_submission
 from accounts.permissions import IsOwnerOrAdmin, IsReviewer, IsAdmin
 from core.exceptions import InvalidWorkflowTransition, KaizenAPIException
+from core.rbac import (
+    require_role,
+    IsCommitteeOrAbove,
+    IsCoordinatorOrAdmin,
+    IsOwnerOrCommitteeOrAbove,
+    get_role_category,
+)
 
 import logging
 
@@ -36,19 +43,14 @@ class KaizenViewSet(viewsets.ModelViewSet):
 
     Endpoints:
         GET    /api/v1/kaizens/              — List all Kaizens (filtered, paginated, sorted)
-        POST   /api/v1/kaizens/              — Create a new Kaizen
+        POST   /api/v1/kaizens/              — Create a new Kaizen / Save Draft
         GET    /api/v1/kaizens/<id>/          — Get Kaizen detail
-        PUT    /api/v1/kaizens/<id>/          — Update Kaizen (draft/rework only)
+        PUT    /api/v1/kaizens/<id>/          — Update Kaizen (drafts/rework or committee review)
         PATCH  /api/v1/kaizens/<id>/          — Partial update
         DELETE /api/v1/kaizens/<id>/          — Delete (drafts only)
-        POST   /api/v1/kaizens/<id>/submit/   — Submit for review
+        POST   /api/v1/kaizens/<id>/submit/   — Submit draft for review (strict validation)
         GET    /api/v1/kaizens/drafts/         — Current user's drafts
         GET    /api/v1/kaizens/my-kaizens/     — Current user's Kaizens
-        GET    /api/v1/kaizens/assigned/       — Assigned for review
-        GET    /api/v1/kaizens/pending/        — Pending Kaizens
-        GET    /api/v1/kaizens/approved/       — Approved Kaizens
-        GET    /api/v1/kaizens/rejected/       — Rejected Kaizens
-        GET    /api/v1/kaizens/closed/         — Closed Kaizens
     """
     permission_classes = [AllowAny]
     filterset_class = KaizenFilter
@@ -58,6 +60,19 @@ class KaizenViewSet(viewsets.ModelViewSet):
         'created_at', 'implementation_date', 'area', 'mini_factory',
     ]
     ordering = ['-created_at']
+
+    def get_permissions(self):
+        """
+        RBAC enforcement per action:
+        - update / partial_update : IsOwnerOrCommitteeOrAbove (draft owner or committee/coordinator/admin)
+        - destroy                 : IsCoordinatorOrAdmin or draft owner
+        - list / retrieve / create / submit : AllowAny (view logic checks authenticated user)
+        """
+        if self.action in ('update', 'partial_update'):
+            return [IsOwnerOrCommitteeOrAbove()]
+        if self.action in ('destroy',):
+            return [IsOwnerOrCommitteeOrAbove()]
+        return [AllowAny()]
 
     def get_queryset(self):
         return Kaizen.objects.select_related(
@@ -70,41 +85,56 @@ class KaizenViewSet(viewsets.ModelViewSet):
         return KaizenDetailSerializer
 
     def perform_create(self, serializer):
-        """Auto-generate sr_no and set created_by.
-
-        Falls back to the default initiator user when the request is
-        unauthenticated (AnonymousUser), allowing the frontend to submit
-        Kaizens without a full auth token during development.
-        """
+        """Auto-generate sr_no, assign created_by, and timestamp submission if submitted."""
         from accounts.models import CustomUser
 
         user = self.request.user
         if not user or not user.is_authenticated:
-            # Use the first active CustomUser as the default submitter
+            # Fallback to the first active user for development/unauthenticated calls
             user = (
                 CustomUser.objects.filter(is_active=True).first()
                 or CustomUser.objects.first()
             )
             if user is None:
-                from core.exceptions import KaizenAPIException
                 raise KaizenAPIException(
                     message='No active user exists in the system. Please create a user first.',
                     code='NO_USER',
                     status_code=503,
                 )
 
-        serializer.save(
+        target_status = self.request.data.get('status', 'draft')
+        submitted_at = timezone.now() if target_status == 'submitted' else None
+
+        instance = serializer.save(
             created_by=user,
             sr_no=Kaizen.generate_sr_no(),
+            status=target_status,
+            submitted_at=submitted_at,
         )
+
+        # If submitted on creation, validate all compulsory fields
+        if target_status == 'submitted':
+            errors = validate_kaizen_for_submission(instance)
+            if errors:
+                # Revert to draft if compulsory fields are missing
+                instance.status = 'draft'
+                instance.submitted_at = None
+                instance.save(update_fields=['status', 'submitted_at'])
+                raise KaizenAPIException(
+                    message='Kaizen is incomplete. All compulsory fields must be filled before submission.',
+                    code='INCOMPLETE_SUBMISSION',
+                    status_code=422,
+                    details=errors,
+                )
 
     def create(self, request, *args, **kwargs):
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         self.perform_create(serializer)
+        is_draft = serializer.instance.status == 'draft'
         return Response({
             'success': True,
-            'message': 'Kaizen created successfully.',
+            'message': 'Kaizen draft saved successfully.' if is_draft else 'Kaizen submitted for review successfully.',
             'data': serializer.data,
         }, status=status.HTTP_201_CREATED)
 
@@ -115,28 +145,78 @@ class KaizenViewSet(viewsets.ModelViewSet):
 
     def update(self, request, *args, **kwargs):
         instance = self.get_object()
+        user = request.user
+        user_role_cat = get_role_category(user)
+
+        # Initiator permissions on updating Kaizens:
+        # Initiators can only update their own drafts or rework items.
+        if user_role_cat == 'initiator' and user.is_authenticated:
+            if instance.created_by != user:
+                raise KaizenAPIException(
+                    message='Access denied. You can only edit your own Kaizen sheets.',
+                    code='PERMISSION_DENIED',
+                    status_code=403,
+                )
+            if not instance.is_editable:
+                raise KaizenAPIException(
+                    message='This Kaizen has already been submitted and cannot be modified.',
+                    code='NOT_EDITABLE',
+                    status_code=403,
+                )
+
+            # Initiators can only set status to 'draft' or 'submitted'
+            requested_status = request.data.get('status')
+            if requested_status and requested_status not in ('draft', 'submitted'):
+                raise KaizenAPIException(
+                    message='Initiators can only save as draft or submit for committee review.',
+                    code='INVALID_STATUS_CHANGE',
+                    status_code=403,
+                )
 
         partial = kwargs.pop('partial', False)
         serializer = self.get_serializer(instance, data=request.data, partial=partial)
         serializer.is_valid(raise_exception=True)
         updated_instance = serializer.save()
 
-        # If status was transitioned via review, record workflow history
+        # Handle submission on update
         new_status = request.data.get('status')
-        if new_status and new_status != instance.status:
+        if new_status == 'submitted' and instance.status != 'submitted':
+            errors = validate_kaizen_for_submission(updated_instance)
+            if errors:
+                updated_instance.status = 'draft'
+                updated_instance.save(update_fields=['status'])
+                raise KaizenAPIException(
+                    message='Kaizen is incomplete. All compulsory fields must be filled before submission.',
+                    code='INCOMPLETE_SUBMISSION',
+                    status_code=422,
+                    details=errors,
+                )
+            updated_instance.submitted_at = timezone.now()
+            updated_instance.save(update_fields=['submitted_at'])
+
+            from workflow.models import WorkflowHistory
+            WorkflowHistory.objects.create(
+                kaizen=updated_instance,
+                action='submitted',
+                from_status=instance.status,
+                to_status='submitted',
+                performed_by=user if user.is_authenticated else None,
+                remarks='Kaizen submitted for review.',
+            )
+        elif new_status and new_status != instance.status:
             from workflow.models import WorkflowHistory
             WorkflowHistory.objects.create(
                 kaizen=updated_instance,
                 action=new_status,
                 from_status=instance.status,
                 to_status=new_status,
-                performed_by=None,
+                performed_by=user if user.is_authenticated else None,
                 remarks=request.data.get('remark', f'Status updated to {new_status} by committee.'),
             )
 
         return Response({
             'success': True,
-            'message': 'Kaizen updated successfully.',
+            'message': 'Kaizen draft updated successfully.' if updated_instance.status == 'draft' else 'Kaizen updated successfully.',
             'data': serializer.data,
         })
 
@@ -150,9 +230,8 @@ class KaizenViewSet(viewsets.ModelViewSet):
                 status_code=403,
             )
 
-        if instance.created_by != request.user and not (
-            request.user.role and request.user.role.name == 'admin'
-        ):
+        user_role = get_role_category(request.user)
+        if instance.created_by != request.user and user_role not in ('coordinator', 'admin'):
             raise KaizenAPIException(
                 message='You can only delete your own drafts.',
                 code='PERMISSION_DENIED',
@@ -173,9 +252,18 @@ class KaizenViewSet(viewsets.ModelViewSet):
     def submit(self, request, pk=None):
         """
         POST /api/v1/kaizens/<id>/submit/
-        Submit a draft Kaizen for review.
+        Submit a draft Kaizen for review with strict compulsory validation.
         """
         kaizen = self.get_object()
+        user = request.user
+        user_role = get_role_category(user)
+
+        if user.is_authenticated and kaizen.created_by != user and user_role not in ('coordinator', 'admin'):
+            raise KaizenAPIException(
+                message='You do not have permission to submit this draft.',
+                code='PERMISSION_DENIED',
+                status_code=403,
+            )
 
         if kaizen.status not in ('draft', 'rework'):
             raise InvalidWorkflowTransition(
@@ -183,35 +271,19 @@ class KaizenViewSet(viewsets.ModelViewSet):
                 details={'current_status': kaizen.status, 'allowed_from': ['draft', 'rework']},
             )
 
-        # Validate required fields
+        # Strict validation of all compulsory fields
         errors = validate_kaizen_for_submission(kaizen)
         if errors:
             raise KaizenAPIException(
-                message='Kaizen is incomplete. Please fill all required fields before submission.',
+                message='Kaizen is incomplete. All compulsory fields must be filled before submission.',
                 code='INCOMPLETE_SUBMISSION',
                 status_code=422,
                 details=errors,
             )
 
-        # Assign reviewer if provided
-        serializer = KaizenSubmitSerializer(data=request.data)
-        serializer.is_valid(raise_exception=True)
-        reviewer_id = serializer.validated_data.get('assigned_reviewer')
-        if reviewer_id:
-            from accounts.models import CustomUser
-            try:
-                reviewer = CustomUser.objects.get(pk=reviewer_id)
-                kaizen.assigned_reviewer = reviewer
-            except CustomUser.DoesNotExist:
-                raise KaizenAPIException(
-                    message='Assigned reviewer not found.',
-                    code='REVIEWER_NOT_FOUND',
-                    status_code=404,
-                )
-
         kaizen.status = 'submitted'
         kaizen.submitted_at = timezone.now()
-        kaizen.save()
+        kaizen.save(update_fields=['status', 'submitted_at', 'updated_at'])
 
         # Create workflow history
         from workflow.models import WorkflowHistory
@@ -220,7 +292,7 @@ class KaizenViewSet(viewsets.ModelViewSet):
             action='submitted',
             from_status='draft' if kaizen.status != 'rework' else 'rework',
             to_status='submitted',
-            performed_by=request.user,
+            performed_by=user if user.is_authenticated else None,
             remarks='Kaizen submitted for review.',
         )
 
@@ -233,10 +305,14 @@ class KaizenViewSet(viewsets.ModelViewSet):
     @action(detail=False, methods=['get'])
     def drafts(self, request):
         """GET /api/v1/kaizens/drafts/ — Current user's draft Kaizens."""
-        queryset = self.get_queryset().filter(
-            created_by=request.user,
-            status='draft',
-        )
+        user = request.user
+        if not user or not user.is_authenticated:
+            queryset = self.get_queryset().filter(status='draft')
+        else:
+            queryset = self.get_queryset().filter(
+                created_by=user,
+                status='draft',
+            )
         serializer = KaizenListSerializer(queryset, many=True)
         return Response({'success': True, 'data': serializer.data})
 

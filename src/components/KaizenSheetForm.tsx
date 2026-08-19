@@ -1,10 +1,13 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Kaizen } from '../types';
-import { Upload, HelpCircle, Check, Eye, Trash2, Camera } from 'lucide-react';
+import { Upload, HelpCircle, Check, Eye, Trash2, Camera, Save, Send, Clock, FileEdit, AlertCircle } from 'lucide-react';
 import CameraModal from './CameraModal';
 
 interface KaizenSheetFormProps {
-  onAddKaizen: (kaizen: Partial<Kaizen> & { photoBeforeFile?: File; photoAfterFile?: File }) => void;
+  initialData?: Kaizen | null;
+  onAddKaizen?: (kaizen: Partial<Kaizen> & { photoBeforeFile?: File; photoAfterFile?: File }) => void;
+  onSaveDraft?: (draft: Partial<Kaizen> & { photoBeforeFile?: File; photoAfterFile?: File }) => void;
+  onSubmitKaizen?: (kaizen: Partial<Kaizen> & { photoBeforeFile?: File; photoAfterFile?: File }) => void;
   onCancel: () => void;
 }
 
@@ -18,46 +21,97 @@ const presetImages = {
   genericAfter: `data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="400" height="250" viewBox="0 0 400 250"><rect width="100%" height="100%" fill="%23f3f4f6"/><rect x="50" y="50" width="300" height="150" rx="8" fill="none" stroke="%239ca3af" stroke-width="2" stroke-dasharray="6,6"/><circle cx="200" cy="120" r="30" fill="%23d1d5db"/><path d="M185,120 L215,120 M200,105 L200,135" stroke="%239ca3af" stroke-width="4"/><text x="200" y="170" font-family="sans-serif" font-size="12" fill="%236b7280" text-anchor="middle">AFTER STATUS PHOTO</text></svg>`
 };
 
-export default function KaizenSheetForm({ onAddKaizen, onCancel }: KaizenSheetFormProps) {
+export default function KaizenSheetForm({ 
+  initialData, 
+  onAddKaizen, 
+  onSaveDraft, 
+  onSubmitKaizen, 
+  onCancel 
+}: KaizenSheetFormProps) {
+  // Existing Draft ID and Serial Number if in editing mode
+  const [draftId, setDraftId] = useState<string | undefined>(initialData?.id);
+  const [draftSrNo, setDraftSrNo] = useState<string | undefined>(initialData?.srNo);
+  const [lastSavedTime, setLastSavedTime] = useState<string | null>(
+    (initialData as any)?.updatedAt || (initialData as any)?.updated_at || null
+  );
+
   // Core Fields
-  const [title, setTitle] = useState('');
-  const [problemBefore, setProblemBefore] = useState('');
-  const [counterMeasureAfter, setCounterMeasureAfter] = useState('');
-  const [result, setResult] = useState('');
+  const [title, setTitle] = useState(initialData?.title || '');
+  const [problemBefore, setProblemBefore] = useState(initialData?.problemBefore || '');
+  const [counterMeasureAfter, setCounterMeasureAfter] = useState(initialData?.counterMeasureAfter || '');
+  const [result, setResult] = useState(initialData?.result || '');
 
   // Metadata
-  const [area, setArea] = useState('Assembly Line A');
-  const [minifactory, setMinifactory] = useState('MF1');
-  const [location, setLocation] = useState('Bay 4 West');
-  const [machine, setMachine] = useState('Pneumatic Press #3');
+  const [area, setArea] = useState(initialData?.area || 'Assembly Line A');
+  const [minifactory, setMinifactory] = useState(initialData?.minifactory || 'MF1');
+  const [location, setLocation] = useState(initialData?.location || 'Bay 4 West');
+  const [machine, setMachine] = useState(initialData?.machine || 'Pneumatic Press #3');
 
   // Dates & Team
-  const [suggestionDate, setSuggestionDate] = useState(new Date().toISOString().split('T')[0]);
-  const [closingTargetDate, setClosingTargetDate] = useState('');
-  const [implementedDate, setImplementedDate] = useState('');
+  const [suggestionDate, setSuggestionDate] = useState(
+    initialData?.suggestionDate || new Date().toISOString().split('T')[0]
+  );
+  const [closingTargetDate, setClosingTargetDate] = useState(initialData?.closingTargetDate || '');
+  const [implementedDate, setImplementedDate] = useState(initialData?.implementedDate || '');
   
-  const [ideaBy, setIdeaBy] = useState('John Doe (Operator)');
-  const [implementedBy, setImplementedBy] = useState('John Doe');
-  const [preparedBy, setPreparedBy] = useState('John Doe');
+  const [ideaBy, setIdeaBy] = useState(initialData?.ideaBy || 'John Doe (Operator)');
+  const [implementedBy, setImplementedBy] = useState(initialData?.implementedBy || 'John Doe');
+  const [preparedBy, setPreparedBy] = useState(initialData?.preparedBy || 'John Doe');
 
   // Benefits
   const [benefits, setBenefits] = useState({
-    p: false, // Productivity
-    q: false, // Quality
-    c: false, // Cost
-    d: false, // Delivery
-    s: false, // Safety
-    m: false, // Morale
+    p: Boolean(initialData?.benefits?.p),
+    q: Boolean(initialData?.benefits?.q),
+    c: Boolean(initialData?.benefits?.c),
+    d: Boolean(initialData?.benefits?.d),
+    s: Boolean(initialData?.benefits?.s),
+    m: Boolean(initialData?.benefits?.m),
   });
 
-  const [costSave, setCostSave] = useState<number>(0);
+  const [costSave, setCostSave] = useState<number>(initialData?.costSave || 0);
 
-  // Photos — preview (base64 for display) + File objects for upload
-  const [photoBefore, setPhotoBefore] = useState(presetImages.genericBefore);
-  const [photoAfter, setPhotoAfter] = useState(presetImages.genericAfter);
+  // Photos
+  const [photoBefore, setPhotoBefore] = useState(initialData?.photoBefore || presetImages.genericBefore);
+  const [photoAfter, setPhotoAfter] = useState(initialData?.photoAfter || presetImages.genericAfter);
   const [photoBeforeFile, setPhotoBeforeFile] = useState<File | null>(null);
   const [photoAfterFile, setPhotoAfterFile] = useState<File | null>(null);
   const [cameraTarget, setCameraTarget] = useState<'before' | 'after' | null>(null);
+
+  // Synchronize state if initialData changes externally
+  useEffect(() => {
+    if (initialData) {
+      setDraftId(initialData.id);
+      setDraftSrNo(initialData.srNo);
+      setTitle(initialData.title || '');
+      setProblemBefore(initialData.problemBefore || '');
+      setCounterMeasureAfter(initialData.counterMeasureAfter || '');
+      setResult(initialData.result || '');
+      setArea(initialData.area || 'Assembly Line A');
+      setMinifactory(initialData.minifactory || 'MF1');
+      setLocation(initialData.location || 'Bay 4 West');
+      setMachine(initialData.machine || '');
+      setSuggestionDate(initialData.suggestionDate || new Date().toISOString().split('T')[0]);
+      setClosingTargetDate(initialData.closingTargetDate || '');
+      setImplementedDate(initialData.implementedDate || '');
+      setIdeaBy(initialData.ideaBy || '');
+      setImplementedBy(initialData.implementedBy || '');
+      setPreparedBy(initialData.preparedBy || '');
+      if (initialData.benefits) {
+        setBenefits({
+          p: Boolean(initialData.benefits.p),
+          q: Boolean(initialData.benefits.q),
+          c: Boolean(initialData.benefits.c),
+          d: Boolean(initialData.benefits.d),
+          s: Boolean(initialData.benefits.s),
+          m: Boolean(initialData.benefits.m),
+        });
+      }
+      setCostSave(initialData.costSave || 0);
+      if (initialData.photoBefore) setPhotoBefore(initialData.photoBefore);
+      if (initialData.photoAfter) setPhotoAfter(initialData.photoAfter);
+      setLastSavedTime((initialData as any)?.updatedAt || (initialData as any)?.updated_at || null);
+    }
+  }, [initialData]);
 
   // AI Loading / States
   const [isAiLoading, setIsAiLoading] = useState(false);
@@ -185,34 +239,130 @@ export default function KaizenSheetForm({ onAddKaizen, onCancel }: KaizenSheetFo
     setBenefits(prev => ({ ...prev, [key]: !prev[key] }));
   };
 
+  // Helper to format ISO timestamp nicely
+  const formatSavedTimestamp = (timestamp?: string | null) => {
+    if (!timestamp) return null;
+    try {
+      const d = new Date(timestamp);
+      if (isNaN(d.getTime())) return timestamp;
+      return d.toLocaleString('en-IN', {
+        day: '2-digit',
+        month: 'short',
+        year: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit',
+        hour12: true
+      });
+    } catch {
+      return timestamp;
+    }
+  };
+
+  // 1. Save Draft Handler — Partial data is explicitly allowed!
+  const handleSaveDraftClick = (e?: React.MouseEvent) => {
+    if (e) e.preventDefault();
+    setError(null);
+
+    // Provide a default title if none entered so it's identifiable
+    const draftTitle = title.trim() || 'Untitled Kaizen Draft';
+
+    const draftPayload: Partial<Kaizen> & { photoBeforeFile?: File; photoAfterFile?: File } = {
+      id: draftId,
+      srNo: draftSrNo,
+      title: draftTitle,
+      problemBefore: problemBefore.trim(),
+      counterMeasureAfter: counterMeasureAfter.trim(),
+      result: result.trim(),
+      area,
+      minifactory,
+      location,
+      machine,
+      suggestionDate,
+      closingTargetDate: closingTargetDate || undefined,
+      implementedDate: implementedDate || undefined,
+      costSave,
+      benefits,
+      ideaBy: ideaBy.trim(),
+      implementedBy: implementedBy.trim(),
+      preparedBy: preparedBy.trim(),
+      status: 'Draft',
+      classification: 'Pending',
+      remark: '',
+      photoBeforeFile: photoBeforeFile || undefined,
+      photoAfterFile: photoAfterFile || undefined,
+    };
+
+    const nowIso = new Date().toISOString();
+    setLastSavedTime(nowIso);
+
+    if (onSaveDraft) {
+      onSaveDraft(draftPayload);
+    } else if (onAddKaizen) {
+      onAddKaizen(draftPayload);
+    }
+  };
+
+  // 2. Final Submit Handler — Strict Compulsory Validation!
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!title || !problemBefore || !counterMeasureAfter) {
-      setError('Please fill out the Title, Problem/Before, and Counter Measure/After status fields.');
-      return;
+    setError(null);
+
+    // Compulsory field validation
+    const missingFields: string[] = [];
+
+    if (!title || title.trim().length < 5) {
+      missingFields.push('Title (minimum 5 characters)');
+    }
+    if (!problemBefore || problemBefore.trim().length < 10) {
+      missingFields.push('Problem / Before status description (minimum 10 characters)');
+    }
+    if (!counterMeasureAfter || counterMeasureAfter.trim().length < 10) {
+      missingFields.push('Counter Measure / After improvement description (minimum 10 characters)');
+    }
+    if (!area || !area.trim()) {
+      missingFields.push('Shopfloor Area');
+    }
+    if (!minifactory || !minifactory.trim()) {
+      missingFields.push('Mini-Factory');
+    }
+    if (!location || !location.trim()) {
+      missingFields.push('Specific Location in plant');
+    }
+    if (!suggestionDate) {
+      missingFields.push('Suggestion Date');
+    }
+    if (!ideaBy || !ideaBy.trim()) {
+      missingFields.push('Idea By (Originator name)');
+    }
+
+    const hasBenefit = Object.values(benefits).some(Boolean);
+    if (!hasBenefit) {
+      missingFields.push('At least one PQCDSM benefit category');
     }
 
     const isBeforePhotoMissing = !photoBefore || photoBefore === presetImages.genericBefore;
     const isAfterPhotoMissing = !photoAfter || photoAfter === presetImages.genericAfter;
 
-    if (isBeforePhotoMissing && isAfterPhotoMissing) {
-      setError('Both BEFORE and AFTER improvement photos are compulsory before saving this Kaizen sheet. Please upload or take photos.');
-      return;
-    }
     if (isBeforePhotoMissing) {
-      setError('The BEFORE status photo is compulsory before saving. Please upload or take a Before photo.');
-      return;
+      missingFields.push('BEFORE improvement photo');
     }
     if (isAfterPhotoMissing) {
-      setError('The AFTER improvement photo is compulsory before saving. Please upload or take an After photo.');
+      missingFields.push('AFTER improvement photo');
+    }
+
+    if (missingFields.length > 0) {
+      setError(`All compulsory fields must be completed before final submission:\n• ${missingFields.join('\n• ')}`);
+      window.scrollTo({ top: 0, behavior: 'smooth' });
       return;
     }
 
-    onAddKaizen({
-      title,
-      problemBefore,
-      counterMeasureAfter,
-      result,
+    const submissionPayload: Partial<Kaizen> & { photoBeforeFile?: File; photoAfterFile?: File } = {
+      id: draftId,
+      srNo: draftSrNo,
+      title: title.trim(),
+      problemBefore: problemBefore.trim(),
+      counterMeasureAfter: counterMeasureAfter.trim(),
+      result: result.trim(),
       area,
       minifactory,
       location,
@@ -222,16 +372,21 @@ export default function KaizenSheetForm({ onAddKaizen, onCancel }: KaizenSheetFo
       implementedDate: implementedDate || new Date().toISOString().split('T')[0],
       costSave,
       benefits,
-      ideaBy,
-      implementedBy,
-      preparedBy,
+      ideaBy: ideaBy.trim(),
+      implementedBy: implementedBy.trim(),
+      preparedBy: preparedBy.trim(),
       status: 'Pending',
       classification: 'Pending',
       remark: '',
-      // Pass actual File objects so App.tsx can upload them to the backend
       photoBeforeFile: photoBeforeFile || undefined,
       photoAfterFile: photoAfterFile || undefined,
-    } as any);
+    };
+
+    if (onSubmitKaizen) {
+      onSubmitKaizen(submissionPayload);
+    } else if (onAddKaizen) {
+      onAddKaizen(submissionPayload);
+    }
   };
 
   return (
@@ -240,12 +395,27 @@ export default function KaizenSheetForm({ onAddKaizen, onCancel }: KaizenSheetFo
       {/* Title Header */}
       <div className="bg-slate-900 px-6 py-4 flex flex-col sm:flex-row sm:items-center sm:justify-between border-b border-slate-800 gap-3">
         <div>
-          <h2 className="text-lg font-bold text-white tracking-wide">
-            KAIZEN SHEET (Continuous Improvement)
-          </h2>
-          <p className="text-xs text-slate-400 font-mono mt-0.5">
-            Submit Daily Improvements & Estimate Operational Impact
-          </p>
+          <div className="flex items-center space-x-2">
+            <h2 className="text-lg font-bold text-white tracking-wide">
+              {draftId ? 'EDIT KAIZEN DRAFT' : 'KAIZEN SHEET (Continuous Improvement)'}
+            </h2>
+            {draftSrNo && (
+              <span className="text-[11px] font-mono font-bold px-2 py-0.5 rounded-md bg-amber-500/20 text-amber-300 border border-amber-500/30">
+                {draftSrNo}
+              </span>
+            )}
+          </div>
+          <div className="flex items-center space-x-3 mt-0.5">
+            <p className="text-xs text-slate-400 font-mono">
+              {draftId ? 'Update draft or complete all fields for final submission' : 'Submit Daily Improvements & Estimate Operational Impact'}
+            </p>
+            {lastSavedTime && (
+              <span className="text-[11px] text-emerald-400 font-mono flex items-center space-x-1">
+                <Clock className="w-3 h-3 inline" />
+                <span>Last saved: {formatSavedTimestamp(lastSavedTime)}</span>
+              </span>
+            )}
+          </div>
         </div>
         
         {/* Test Preset Buttons */}
@@ -686,21 +856,39 @@ export default function KaizenSheetForm({ onAddKaizen, onCancel }: KaizenSheetFo
           </div>
         </div>
 
-        {/* Buttons */}
-        <div className="flex items-center justify-end space-x-3 pt-4 border-t border-slate-100">
-          <button
-            type="button"
-            onClick={onCancel}
-            className="px-5 py-2.5 border border-slate-300 text-slate-700 rounded-xl text-sm font-semibold hover:bg-slate-50 transition"
-          >
-            Cancel
-          </button>
-          <button
-            type="submit"
-            className="px-6 py-2.5 bg-slate-900 text-white rounded-xl text-sm font-semibold hover:bg-slate-800 transition shadow-sm"
-          >
-            Submit Kaizen Sheet
-          </button>
+        {/* Action Buttons: Cancel | Save Draft | Submit Kaizen */}
+        <div className="flex flex-col sm:flex-row items-center justify-between gap-3 pt-5 border-t border-slate-100">
+          <div className="text-[11px] text-slate-500 font-mono flex items-center space-x-1.5">
+            <span className="w-2 h-2 rounded-full bg-emerald-500 inline-block" />
+            <span>Drafts save automatically with timestamps. Final submission requires all mandatory fields.</span>
+          </div>
+
+          <div className="flex items-center space-x-3 w-full sm:w-auto justify-end">
+            <button
+              type="button"
+              onClick={onCancel}
+              className="px-4 py-2.5 border border-slate-300 text-slate-700 rounded-xl text-xs font-bold hover:bg-slate-50 transition cursor-pointer"
+            >
+              Cancel
+            </button>
+
+            <button
+              type="button"
+              onClick={handleSaveDraftClick}
+              className="px-5 py-2.5 bg-amber-500/10 border border-amber-500/30 hover:bg-amber-500/20 text-amber-800 rounded-xl text-xs font-bold transition flex items-center space-x-1.5 shadow-sm cursor-pointer"
+            >
+              <Save className="w-3.5 h-3.5" />
+              <span>Save Draft</span>
+            </button>
+
+            <button
+              type="submit"
+              className="px-6 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-bold transition shadow-md shadow-emerald-600/20 flex items-center space-x-1.5 cursor-pointer"
+            >
+              <Send className="w-3.5 h-3.5" />
+              <span>Submit Kaizen Sheet</span>
+            </button>
+          </div>
         </div>
 
       </form>

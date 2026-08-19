@@ -50,6 +50,7 @@ class UserProfileSerializer(serializers.ModelSerializer):
     """Serializer for viewing/updating user profiles."""
     role_detail = RoleSerializer(source='role', read_only=True)
     full_name = serializers.SerializerMethodField()
+    role_category = serializers.SerializerMethodField()
 
     class Meta:
         model = CustomUser
@@ -57,6 +58,7 @@ class UserProfileSerializer(serializers.ModelSerializer):
             'id', 'username', 'email', 'first_name', 'last_name',
             'full_name', 'employee_id', 'department', 'designation',
             'plant', 'area', 'phone', 'role', 'role_detail',
+            'role_category',
             'is_active_employee', 'last_activity', 'date_joined',
             'last_login',
         ]
@@ -64,6 +66,13 @@ class UserProfileSerializer(serializers.ModelSerializer):
 
     def get_full_name(self, obj):
         return obj.get_full_name()
+
+    def get_role_category(self, obj) -> str:
+        """
+        Returns the normalised RBAC category string for the frontend.
+        One of: 'initiator' | 'coordinator' | 'committee' | 'admin'
+        """
+        return obj.role_category
 
 
 class UserListSerializer(serializers.ModelSerializer):

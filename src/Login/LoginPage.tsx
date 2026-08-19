@@ -79,6 +79,15 @@ export default function LoginPage({ onLoginSuccess }: LoginPageProps) {
 
           const rawFromLogin = body?.data?.user;
           if (rawFromLogin) {
+            const rawCategory = rawFromLogin.roleCategory || rawFromLogin.role_category;
+            const roleName = rawFromLogin.roleDetail?.name || rawFromLogin.role_detail?.name || rawFromLogin.roleName || rawFromLogin.role_name || '';
+            
+            // Map to normalized category if not explicit
+            let category: 'initiator' | 'coordinator' | 'committee' | 'admin' = 'initiator';
+            if (rawCategory === 'admin' || roleName === 'admin') category = 'admin';
+            else if (rawCategory === 'coordinator' || roleName === 'kaizen_lead') category = 'coordinator';
+            else if (rawCategory === 'committee' || roleName === 'reviewer' || roleName === 'cft_member' || roleName === 'verifier') category = 'committee';
+
             user = {
               id: rawFromLogin.id,
               username: rawFromLogin.username || cleanUsername,
@@ -94,7 +103,8 @@ export default function LoginPage({ onLoginSuccess }: LoginPageProps) {
               department: rawFromLogin.department || '',
               designation: rawFromLogin.designation || '',
               plant: rawFromLogin.plant || '',
-              role_name: rawFromLogin.roleDetail?.name || rawFromLogin.role_detail?.name || rawFromLogin.roleName || '',
+              role_name: roleName,
+              role_category: category,
             };
           }
 
@@ -111,6 +121,14 @@ export default function LoginPage({ onLoginSuccess }: LoginPageProps) {
               if (profileRes.ok) {
                 const profileBody = await profileRes.json();
                 const rawUser = profileBody?.data ?? profileBody;
+                const rawCategory = rawUser.roleCategory || rawUser.role_category;
+                const roleName = rawUser.roleDetail?.name || rawUser.role_detail?.name || rawUser.roleName || rawUser.role_name || '';
+                
+                let category: 'initiator' | 'coordinator' | 'committee' | 'admin' = 'initiator';
+                if (rawCategory === 'admin' || roleName === 'admin') category = 'admin';
+                else if (rawCategory === 'coordinator' || roleName === 'kaizen_lead') category = 'coordinator';
+                else if (rawCategory === 'committee' || roleName === 'reviewer' || roleName === 'cft_member' || roleName === 'verifier') category = 'committee';
+
                 user = {
                   id: rawUser.id,
                   username: rawUser.username || cleanUsername,
@@ -126,7 +144,8 @@ export default function LoginPage({ onLoginSuccess }: LoginPageProps) {
                   department: rawUser.department || '',
                   designation: rawUser.designation || '',
                   plant: rawUser.plant || '',
-                  role_name: rawUser.roleDetail?.name || rawUser.role_detail?.name || rawUser.roleName || '',
+                  role_name: roleName,
+                  role_category: category,
                 };
               }
             } catch {
@@ -146,6 +165,8 @@ export default function LoginPage({ onLoginSuccess }: LoginPageProps) {
               department: '',
               designation: '',
               plant: '',
+              role_name: 'initiator',
+              role_category: 'initiator',
             };
           }
 

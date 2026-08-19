@@ -8,6 +8,7 @@ from django.db import models
 from django.conf import settings
 from django.core.validators import FileExtensionValidator
 from django.utils import timezone
+from django.utils.timezone import localdate
 import datetime
 
 
@@ -43,15 +44,15 @@ class Kaizen(models.Model):
     )
 
     # Core Kaizen fields
-    month = models.CharField(max_length=20, help_text='Month name (e.g., June, July)')
-    suggestion_date = models.DateField(help_text='Date the suggestion was made')
-    title = models.CharField(max_length=500, help_text='Kaizen improvement title')
-    problem_before = models.TextField(help_text='Description of the problem before improvement')
-    counter_measure_after = models.TextField(help_text='Description of the countermeasure / improvement after')
-    area = models.CharField(max_length=200, help_text='Plant area')
-    mini_factory = models.CharField(max_length=100, help_text='Mini-factory designation')
-    location = models.CharField(max_length=200, help_text='Specific location')
-    machine = models.CharField(max_length=200, blank=True, help_text='Machine/equipment name')
+    month = models.CharField(max_length=20, default='', blank=True, help_text='Month name (e.g., June, July)')
+    suggestion_date = models.DateField(default=localdate, help_text='Date the suggestion was made')
+    title = models.CharField(max_length=500, blank=True, default='', help_text='Kaizen improvement title')
+    problem_before = models.TextField(blank=True, default='', help_text='Description of the problem before improvement')
+    counter_measure_after = models.TextField(blank=True, default='', help_text='Description of the countermeasure / improvement after')
+    area = models.CharField(max_length=200, blank=True, default='', help_text='Plant area')
+    mini_factory = models.CharField(max_length=100, blank=True, default='', help_text='Mini-factory designation')
+    location = models.CharField(max_length=200, blank=True, default='', help_text='Specific location')
+    machine = models.CharField(max_length=200, blank=True, default='', help_text='Machine/equipment name')
 
     # Dates
     closing_target_date = models.DateField(null=True, blank=True, help_text='Target date for closing')
@@ -66,11 +67,11 @@ class Kaizen(models.Model):
     )
 
     # People
-    idea_by = models.CharField(max_length=200, help_text='Name of the person who suggested the idea')
-    implemented_by = models.CharField(max_length=200, blank=True, help_text='Person/team who implemented')
-    prepared_by = models.CharField(max_length=200, blank=True, help_text='Person who prepared the Kaizen sheet')
-    approved_by = models.CharField(max_length=200, blank=True, help_text='Approver name')
-    verified_by_name = models.CharField(max_length=200, blank=True, help_text='Verifier name')
+    idea_by = models.CharField(max_length=200, blank=True, default='', help_text='Name of the person who suggested the idea')
+    implemented_by = models.CharField(max_length=200, blank=True, default='', help_text='Person/team who implemented')
+    prepared_by = models.CharField(max_length=200, blank=True, default='', help_text='Person who prepared the Kaizen sheet')
+    approved_by = models.CharField(max_length=200, blank=True, default='', help_text='Approver name')
+    verified_by_name = models.CharField(max_length=200, blank=True, default='', help_text='Verifier name')
 
     # Status & Classification
     status = models.CharField(

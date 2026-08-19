@@ -22,9 +22,12 @@ import {
   Trophy,
   Award,
   Vote,
-  Workflow
+  Workflow,
+  ShieldCheck,
+  FileEdit
 } from 'lucide-react';
 import { UserPersona } from '../types';
+import { RoleCategory, canAccessTab, getRoleBadge } from '../utils/rbac';
 
 interface SidebarProps {
   activeModule: string;
@@ -34,6 +37,8 @@ interface SidebarProps {
   persona: UserPersona;
   setPersona: (p: UserPersona) => void;
   openRedflagsCount: number;
+  draftsCount?: number;
+  userRole?: RoleCategory;
   
   // Quick sub-action setters
   setInitialRedFlagAction: (act: string | null) => void;
@@ -54,6 +59,8 @@ export default function Sidebar({
   persona,
   setPersona,
   openRedflagsCount,
+  draftsCount = 0,
+  userRole = 'initiator',
   setInitialRedFlagAction,
   setInitialFiveSAction,
   setInitialSafetyAction,
@@ -235,6 +242,7 @@ export default function Sidebar({
             {/* Kaizen Submenu */}
             {isExpanded && expandedMenus.kaizen && (
               <div className="pl-7 pr-1 py-1 space-y-1 border-l-2 border-slate-900 ml-5 animate-fade-in">
+                {/* 1. Overview Dashboard: Accessible to ALL roles */}
                 <button
                   onClick={() => selectSubTab('kaizen', 'dashboard')}
                   className={`w-full flex items-center space-x-2 px-2.5 py-1.5 rounded-lg text-left text-[11px] font-semibold transition ${
@@ -246,28 +254,60 @@ export default function Sidebar({
                   <Gauge className="w-3 h-3 shrink-0" />
                   <span>Overview Dashboard</span>
                 </button>
-                <button
-                  onClick={() => selectSubTab('kaizen', 'form')}
-                  className={`w-full flex items-center space-x-2 px-2.5 py-1.5 rounded-lg text-left text-[11px] font-semibold transition ${
-                    activeModule === 'kaizen' && activeTab === 'form'
-                      ? 'text-emerald-400 font-bold bg-slate-900/60'
-                      : 'text-slate-500 hover:text-slate-300 hover:bg-slate-900/30'
-                  }`}
-                >
-                  <PlusCircle className="w-3 h-3 shrink-0" />
-                  <span>👷 Log New Kaizen</span>
-                </button>
-                <button
-                  onClick={() => selectSubTab('kaizen', 'committee')}
-                  className={`w-full flex items-center space-x-2 px-2.5 py-1.5 rounded-lg text-left text-[11px] font-semibold transition ${
-                    activeModule === 'kaizen' && activeTab === 'committee'
-                      ? 'text-emerald-400 font-bold bg-slate-900/60'
-                      : 'text-slate-500 hover:text-slate-300 hover:bg-slate-900/30'
-                  }`}
-                >
-                  <UserCheck className="w-3 h-3 shrink-0" />
-                  <span>👥 Committee Review</span>
-                </button>
+
+                {/* 2. Log New Kaizen: Initiator, Coordinator, Admin */}
+                {canAccessTab(userRole, 'kaizen', 'form') && (
+                  <button
+                    onClick={() => selectSubTab('kaizen', 'form')}
+                    className={`w-full flex items-center space-x-2 px-2.5 py-1.5 rounded-lg text-left text-[11px] font-semibold transition ${
+                      activeModule === 'kaizen' && activeTab === 'form'
+                        ? 'text-emerald-400 font-bold bg-slate-900/60'
+                        : 'text-slate-500 hover:text-slate-300 hover:bg-slate-900/30'
+                    }`}
+                  >
+                    <PlusCircle className="w-3 h-3 shrink-0 text-emerald-400" />
+                    <span>👷 Log New Kaizen</span>
+                  </button>
+                )}
+
+                {/* 2b. My Drafts: Initiator, Coordinator, Admin */}
+                {canAccessTab(userRole, 'kaizen', 'drafts') && (
+                  <button
+                    onClick={() => selectSubTab('kaizen', 'drafts')}
+                    className={`w-full flex items-center justify-between px-2.5 py-1.5 rounded-lg text-left text-[11px] font-semibold transition ${
+                      activeModule === 'kaizen' && activeTab === 'drafts'
+                        ? 'text-amber-400 font-bold bg-slate-900/60'
+                        : 'text-slate-400 hover:text-slate-200 hover:bg-slate-900/30'
+                    }`}
+                  >
+                    <div className="flex items-center space-x-2">
+                      <FileEdit className="w-3 h-3 shrink-0 text-amber-400" />
+                      <span>📝 My Drafts</span>
+                    </div>
+                    {draftsCount > 0 && (
+                      <span className="px-1.5 py-0.2 rounded-full text-[9px] font-mono font-bold bg-amber-500/20 text-amber-300 border border-amber-500/30">
+                        {draftsCount}
+                      </span>
+                    )}
+                  </button>
+                )}
+
+                {/* 3. Committee Review: Committee, Coordinator, Admin */}
+                {canAccessTab(userRole, 'kaizen', 'committee') && (
+                  <button
+                    onClick={() => selectSubTab('kaizen', 'committee')}
+                    className={`w-full flex items-center space-x-2 px-2.5 py-1.5 rounded-lg text-left text-[11px] font-semibold transition ${
+                      activeModule === 'kaizen' && activeTab === 'committee'
+                        ? 'text-emerald-400 font-bold bg-slate-900/60'
+                        : 'text-slate-500 hover:text-slate-300 hover:bg-slate-900/30'
+                    }`}
+                  >
+                    <UserCheck className="w-3 h-3 shrink-0 text-indigo-400" />
+                    <span>👥 Committee Review</span>
+                  </button>
+                )}
+
+                {/* 4. Monthly Best Awards: ALL roles */}
                 <button
                   onClick={() => selectSubTab('cft-awards', '')}
                   className={`w-full flex items-center space-x-2 px-2.5 py-1.5 rounded-lg text-left text-[11px] font-semibold transition ${
@@ -279,17 +319,23 @@ export default function Sidebar({
                   <Trophy className="w-3 h-3 shrink-0 text-amber-400" />
                   <span>🏆 Monthly Best Awards</span>
                 </button>
-                <button
-                  onClick={() => selectSubTab('kaizen', 'impact-tracker')}
-                  className={`w-full flex items-center space-x-2 px-2.5 py-1.5 rounded-lg text-left text-[11px] font-semibold transition ${
-                    activeModule === 'kaizen' && activeTab === 'impact-tracker'
-                      ? 'text-indigo-400 font-bold bg-slate-900/60'
-                      : 'text-indigo-300/80 hover:text-indigo-200 hover:bg-slate-900/30'
-                  }`}
-                >
-                  <ClipboardList className="w-3 h-3 shrink-0 text-indigo-400" />
-                  <span>🎯 Impact Point & Closure</span>
-                </button>
+
+                {/* 5. Impact Point & Closure: Committee, Coordinator, Admin */}
+                {canAccessTab(userRole, 'kaizen', 'impact-tracker') && (
+                  <button
+                    onClick={() => selectSubTab('kaizen', 'impact-tracker')}
+                    className={`w-full flex items-center space-x-2 px-2.5 py-1.5 rounded-lg text-left text-[11px] font-semibold transition ${
+                      activeModule === 'kaizen' && activeTab === 'impact-tracker'
+                        ? 'text-indigo-400 font-bold bg-slate-900/60'
+                        : 'text-indigo-300/80 hover:text-indigo-200 hover:bg-slate-900/30'
+                    }`}
+                  >
+                    <ClipboardList className="w-3 h-3 shrink-0 text-indigo-400" />
+                    <span>🎯 Impact Point & Closure</span>
+                  </button>
+                )}
+
+                {/* 6. End-to-End Flowchart: ALL roles */}
                 <button
                   onClick={() => selectSubTab('kaizen', 'process-flowchart')}
                   className={`w-full flex items-center space-x-2 px-2.5 py-1.5 rounded-lg text-left text-[11px] font-semibold transition ${
@@ -301,17 +347,21 @@ export default function Sidebar({
                   <Workflow className="w-3 h-3 shrink-0 text-indigo-400" />
                   <span>🔄 End-to-End Flowchart</span>
                 </button>
-                <button
-                  onClick={() => selectSubTab('kaizen', 'list')}
-                  className={`w-full flex items-center space-x-2 px-2.5 py-1.5 rounded-lg text-left text-[11px] font-semibold transition ${
-                    activeModule === 'kaizen' && activeTab === 'list'
-                      ? 'text-emerald-400 font-bold bg-slate-900/60'
-                      : 'text-slate-500 hover:text-slate-300 hover:bg-slate-900/30'
-                  }`}
-                >
-                  <ClipboardList className="w-3 h-3 shrink-0" />
-                  <span>📋 Spreadsheet Register</span>
-                </button>
+
+                {/* 7. Spreadsheet Register: Committee, Coordinator, Admin */}
+                {canAccessTab(userRole, 'kaizen', 'list') && (
+                  <button
+                    onClick={() => selectSubTab('kaizen', 'list')}
+                    className={`w-full flex items-center space-x-2 px-2.5 py-1.5 rounded-lg text-left text-[11px] font-semibold transition ${
+                      activeModule === 'kaizen' && activeTab === 'list'
+                        ? 'text-emerald-400 font-bold bg-slate-900/60'
+                        : 'text-slate-500 hover:text-slate-300 hover:bg-slate-900/30'
+                    }`}
+                  >
+                    <ClipboardList className="w-3 h-3 shrink-0 text-emerald-400" />
+                    <span>📋 Spreadsheet Register</span>
+                  </button>
+                )}
               </div>
             )}
           </div>
@@ -544,52 +594,32 @@ export default function Sidebar({
 
         </div>
 
-        {/* Persona quick switch panel at sidebar bottom (Very Enterprise!) */}
+        {/* Active Security Role Badge */}
         {isExpanded && (
           <div className="p-3 border-t border-slate-800/80 bg-slate-950 shrink-0">
-            <span className="block text-[9px] font-black uppercase text-slate-500 tracking-wider mb-2 font-mono">
-              ⚡ WORKSPACE PERSONA
-            </span>
-            <div className="grid grid-cols-1 gap-1 text-[11px]">
-              <button
-                type="button"
-                onClick={() => setPersona('operator')}
-                className={`w-full flex items-center space-x-2 px-2.5 py-1.5 rounded-lg transition ${
-                  persona === 'operator'
-                    ? 'bg-emerald-500 text-slate-950 font-bold'
-                    : 'text-slate-400 hover:bg-slate-900 hover:text-slate-200'
-                }`}
-              >
-                <span>👷</span>
-                <span className="truncate">Operator Console</span>
-              </button>
-              <button
-                type="button"
-                onClick={() => setPersona('committee')}
-                className={`w-full flex items-center space-x-2 px-2.5 py-1.5 rounded-lg transition ${
-                  persona === 'committee'
-                    ? 'bg-indigo-500 text-slate-950 font-bold'
-                    : 'text-slate-400 hover:bg-slate-900 hover:text-slate-200'
-                }`}
-              >
-                <span>👥</span>
-                <span className="truncate">Committee Reviewer</span>
-              </button>
-              <button
-                type="button"
-                onClick={() => setPersona('manager')}
-                className={`w-full flex items-center space-x-2 px-2.5 py-1.5 rounded-lg transition ${
-                  persona === 'manager'
-                    ? 'bg-blue-500 text-slate-950 font-bold'
-                    : 'text-slate-400 hover:bg-slate-900 hover:text-slate-200'
-                }`}
-              >
-                <span>📊</span>
-                <span className="truncate">Manager BI Desk</span>
-              </button>
+            <div className="flex items-center justify-between mb-1.5">
+              <span className="text-[9px] font-black uppercase text-slate-500 tracking-wider font-mono">
+                🔒 RBAC ROLE
+              </span>
+              <span className="text-[9px] text-emerald-400 font-mono font-bold flex items-center space-x-1">
+                <ShieldCheck className="w-3 h-3 text-emerald-400 inline" />
+                <span>ACTIVE</span>
+              </span>
+            </div>
+            <div className={`px-2.5 py-1.5 rounded-xl border flex items-center space-x-2 ${getRoleBadge(userRole).colorClass}`}>
+              <span className="text-sm">{getRoleBadge(userRole).icon}</span>
+              <div className="min-w-0 flex-1">
+                <div className="text-[11px] font-bold truncate leading-tight">
+                  {getRoleBadge(userRole).label}
+                </div>
+                <div className="text-[9px] opacity-75 truncate leading-tight font-mono">
+                  {getRoleBadge(userRole).description}
+                </div>
+              </div>
             </div>
           </div>
         )}
+
 
       </aside>
     </>

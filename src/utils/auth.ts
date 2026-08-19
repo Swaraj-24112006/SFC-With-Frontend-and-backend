@@ -28,6 +28,7 @@ export interface AuthUser {
   designation: string;
   plant: string;
   role_name?: string;
+  role_category?: 'initiator' | 'coordinator' | 'committee' | 'admin';
 }
 
 export interface AuthTokens {

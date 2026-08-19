@@ -2,15 +2,17 @@ import React, { useState } from 'react';
 import { Kaizen } from '../types';
 import { BarChart, Clock, CheckCircle, TrendingUp, IndianRupee, Activity, Users, Award, HelpCircle, ChevronDown, ChevronRight } from 'lucide-react';
 import { formatIndianRupees, formatIndianRupeesCompact } from '../utils';
+import { RoleCategory, canAccessTab } from '../utils/rbac';
 import ExecutiveAnalyticsBoard from './ExecutiveAnalyticsBoard';
 
 interface DashboardProps {
   kaizens: Kaizen[];
   onSelectKaizen: (k: Kaizen) => void;
   onNavigateToTab: (tab: 'form' | 'committee' | 'list' | 'cft-awards' | 'process-flowchart') => void;
+  userRole?: RoleCategory;
 }
 
-export default function Dashboard({ kaizens, onSelectKaizen, onNavigateToTab }: DashboardProps) {
+export default function Dashboard({ kaizens, onSelectKaizen, onNavigateToTab, userRole = 'initiator' }: DashboardProps) {
   const [isPendingCollapsed, setIsPendingCollapsed] = useState(false);
 
   // Compute analytics metrics
@@ -73,18 +75,25 @@ export default function Dashboard({ kaizens, onSelectKaizen, onNavigateToTab }: 
             >
               <span>🔄 End-to-End Flowchart</span>
             </button>
-            <button
-              onClick={() => onNavigateToTab('form')}
-              className="px-5 py-3 bg-emerald-500 hover:bg-emerald-400 text-slate-950 rounded-xl text-xs font-bold transition-all shadow-md shadow-emerald-500/20 flex items-center space-x-1.5 cursor-pointer"
-            >
-              <span>👷 Log New Kaizen</span>
-            </button>
-            <button
-              onClick={() => onNavigateToTab('committee')}
-              className="px-5 py-3 bg-slate-800 hover:bg-slate-700 text-white border border-slate-700 rounded-xl text-xs font-bold transition-all flex items-center space-x-1.5 cursor-pointer"
-            >
-              <span>👥 Review Meeting</span>
-            </button>
+
+            {canAccessTab(userRole, 'kaizen', 'form') && (
+              <button
+                onClick={() => onNavigateToTab('form')}
+                className="px-5 py-3 bg-emerald-500 hover:bg-emerald-400 text-slate-950 rounded-xl text-xs font-bold transition-all shadow-md shadow-emerald-500/20 flex items-center space-x-1.5 cursor-pointer"
+              >
+                <span>👷 Log New Kaizen</span>
+              </button>
+            )}
+
+            {canAccessTab(userRole, 'kaizen', 'committee') && (
+              <button
+                onClick={() => onNavigateToTab('committee')}
+                className="px-5 py-3 bg-slate-800 hover:bg-slate-700 text-white border border-slate-700 rounded-xl text-xs font-bold transition-all flex items-center space-x-1.5 cursor-pointer"
+              >
+                <span>👥 Review Meeting</span>
+              </button>
+            )}
+
             <button
               onClick={() => onNavigateToTab('cft-awards')}
               className="px-5 py-3 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 font-black rounded-xl text-xs transition-all shadow-md flex items-center space-x-1.5 cursor-pointer border border-amber-300"
