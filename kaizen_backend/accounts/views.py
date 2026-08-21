@@ -33,11 +33,14 @@ from core.redis_client import (
 from core.ratelimit import (
     LoginIPRateThrottle,
     LoginUserRateThrottle,
+    ForgotPasswordRateThrottle,
     PasswordResetRateThrottle,
     OTPVerifyRateThrottle,
+    ResendOTPRateThrottle,
     AdminAPIRateThrottle,
     get_client_ip,
 )
+
 
 import logging
 
@@ -280,33 +283,32 @@ class PasswordChangeView(generics.GenericAPIView):
         return response
 
 
-@method_decorator(ratelimit(key='ip', rate='5/m', method='POST', block=True), name='post')
 class ForgotPasswordRequestView(generics.GenericAPIView):
     """
-    POST /api/v1/auth/forgot-password/
-    ───────────────────────────────────
-    Initiates password reset via SMS OTP:
-    1. Looks up user by username or employee_id or email (timing-safe).
-    2. Enforces 60-second cooldown and 5 requests/hour rate limits.
-    3. Generates cryptographically secure 6-digit OTP using secrets module.
-    4. Hashes OTP with make_password and stores in PasswordResetOTP with 5-minute expiry.
-    5. Asynchronously sends OTP via Twilio SMS using Celery task.
-    6. Returns masked phone number and generic success message without leaking account existence.
+    POST /api/v1/auth/forgot-password/  &  /api/auth/forgot-password/
+
+    ────────────────────────────────────────────────────────────────
+    1. Accepts only the username / employee ID (no user-supplied destination email).
+    2. Retrieves registered email strictly from PostgreSQL.
+    3. Generates 6-digit CSPRNG OTP (valid for 5 minutes).
+    4. Hashes OTP with make_password and stores in PasswordResetOTP.
+    5. Dispatches verification code via Django SMTP to registered email.
+    6. Enforces rate limiting (3 requests / 10 min) and 60-second resend cooldown.
+    7. Account enumeration protection: always returns generic success message.
     """
     permission_classes = [AllowAny]
-    throttle_classes = [PasswordResetRateThrottle]
+    throttle_classes = [ForgotPasswordRateThrottle]
 
     def post(self, request):
         import secrets
         from datetime import timedelta
         from django.contrib.auth.hashers import make_password
         from .models import PasswordResetOTP
-        from .tasks import dispatch_sms_otp
+        from .email_service import send_password_reset_email
 
         identifier = (
             request.data.get('username') or
             request.data.get('employee_id') or
-            request.data.get('email') or
             request.data.get('identifier', '')
         ).strip()
 
@@ -322,14 +324,12 @@ class ForgotPasswordRequestView(generics.GenericAPIView):
         ip_address = get_client_ip(request)
         user_agent = request.META.get('HTTP_USER_AGENT', '')
 
-        # Lookup user safely (case-insensitive)
+        # Lookup user safely in PostgreSQL (case-insensitive)
         user = CustomUser.objects.filter(
             models.Q(username__iexact=identifier) |
-            models.Q(employee_id__iexact=identifier) |
-            models.Q(email__iexact=identifier)
+            models.Q(employee_id__iexact=identifier)
         ).first()
 
-        masked_phone = ""
         cooldown_remaining = 0
 
         if user:
@@ -348,34 +348,23 @@ class ForgotPasswordRequestView(generics.GenericAPIView):
                         }
                     }, status=status.HTTP_429_TOO_MANY_REQUESTS)
 
-            # Check hourly request limit (max 5 per hour)
-            one_hour_ago = timezone.now() - timedelta(hours=1)
-            hourly_count = PasswordResetOTP.objects.filter(user=user, created_at__gte=one_hour_ago).count()
-            if hourly_count >= 5:
-                return Response({
-                    'success': False,
-                    'error': {
-                        'code': 'HOURLY_LIMIT_EXCEEDED',
-                        'message': 'Maximum password reset requests exceeded for this hour. Please try again later.',
-                    }
-                }, status=status.HTTP_429_TOO_MANY_REQUESTS)
-
             # Invalidate any previously unused active OTPs for this user
             PasswordResetOTP.objects.filter(user=user, is_used=False).update(is_used=True)
 
-            # Generate cryptographically secure 6-digit numeric OTP (100000 to 999999)
-            raw_otp = f"{secrets.randbelow(900000) + 100000}"
+            # Generate cryptographically secure 6-digit numeric OTP (CSPRNG)
+            raw_otp = f"{secrets.randbelow(1_000_000):06d}"
 
-            # In DEBUG mode, log it straight to runserver terminal so you don't have to check the Celery terminal
+            # In DEBUG mode, log to runserver terminal
             if getattr(settings, 'DEBUG', True):
                 print(f"\n=======================================================", flush=True)
-                print(f" [RUNSERVER OTP LOG] Destination : {user.phone}", flush=True)
-                print(f" [RUNSERVER OTP LOG] 6-Digit Code: {raw_otp}", flush=True)
+                print(f" [EMAIL OTP DISPATCH] User        : {user.username}", flush=True)
+                print(f" [EMAIL OTP DISPATCH] Destination : {user.email or '(no email)'}", flush=True)
+                print(f" [EMAIL OTP DISPATCH] 6-Digit Code: {raw_otp}", flush=True)
                 print(f"=======================================================\n", flush=True)
 
-            # Create new PasswordResetOTP record with salted hash and 5-min expiry
-            expires_at = timezone.now() + timedelta(minutes=5)
-            otp_record = PasswordResetOTP.objects.create(
+            # Create new PasswordResetOTP record with salted hash and 2-hour expiry
+            expires_at = timezone.now() + timedelta(hours=2)
+            PasswordResetOTP.objects.create(
                 user=user,
                 otp_hash=make_password(raw_otp),
                 created_at=timezone.now(),
@@ -386,38 +375,138 @@ class ForgotPasswordRequestView(generics.GenericAPIView):
                 user_agent=user_agent,
             )
 
-            # Dispatch SMS asynchronously via Celery
-            if user.phone:
-                dispatch_sms_otp(user.phone, raw_otp)
-                masked_phone = PasswordResetOTP.mask_phone_number(user.phone)
+            # Send OTP email through Django SMTP
+            if user.email:
+                email_sent = send_password_reset_email(
+                    to_email=user.email,
+                    username=user.username,
+                    raw_otp=raw_otp,
+                    expires_minutes=120
+                )
+                if email_sent:
+                    logger.info(f"PASSWORD_RESET_REQUEST: user={user.username}, ip={ip_address}, expires_at={expires_at}")
             else:
-                logger.warning(f"User {user.username} requested password reset but has no registered phone number.")
-
-            logger.info(f"OTP_REQUESTED: user={user.username}, ip={ip_address}, expires_at={expires_at}")
+                logger.warning(f"User {user.username} requested password reset but has no registered email in database.")
 
         # Always return generic, privacy-safe response to prevent user enumeration
         return Response({
             'success': True,
-            'message': 'If an account matching that identifier exists, a 6-digit verification code has been sent to your registered phone number.',
+            'message': 'If an account matching that username exists, a verification code has been sent to your registered email address.',
             'data': {
-                'masked_phone': masked_phone or '+XX ••••• ••XXXX',
+                'cooldown_seconds': 10,
+                'expires_in_seconds': 7200,
+            }
+        }, status=status.HTTP_200_OK)
+
+
+class ResendOTPView(generics.GenericAPIView):
+    """
+    POST /api/v1/auth/resend-reset-otp/  &  /api/auth/resend-reset-otp/
+    ──────────────────────────────────────────────────────────────────
+    1. Enforces 60-second cooldown per user/IP.
+    2. Invalidates previous active OTP.
+    3. Generates new 6-digit CSPRNG OTP.
+    4. Sends new OTP via Django SMTP to registered email.
+    """
+    permission_classes = [AllowAny]
+    throttle_classes = [ResendOTPRateThrottle]
+
+    def post(self, request):
+        import secrets
+        from datetime import timedelta
+        from django.contrib.auth.hashers import make_password
+        from .models import PasswordResetOTP
+        from .email_service import send_password_reset_email
+
+        identifier = (
+            request.data.get('username') or
+            request.data.get('employee_id') or
+            request.data.get('identifier', '')
+        ).strip()
+
+        if not identifier:
+            return Response({
+                'success': False,
+                'error': {
+                    'code': 'VALIDATION_ERROR',
+                    'message': 'Please provide your Username or Employee ID.',
+                }
+            }, status=status.HTTP_400_BAD_REQUEST)
+
+        ip_address = get_client_ip(request)
+        user_agent = request.META.get('HTTP_USER_AGENT', '')
+
+        user = CustomUser.objects.filter(
+            models.Q(username__iexact=identifier) |
+            models.Q(employee_id__iexact=identifier)
+        ).first()
+
+        if user:
+            recent_otp = PasswordResetOTP.objects.filter(user=user).order_by('-created_at').first()
+            if recent_otp:
+                seconds_since = (timezone.now() - recent_otp.created_at).total_seconds()
+                if seconds_since < 60:
+                    cooldown_remaining = int(60 - seconds_since)
+                    return Response({
+                        'success': False,
+                        'error': {
+                            'code': 'COOLDOWN_ACTIVE',
+                            'message': f'Please wait {cooldown_remaining} seconds before resending code.',
+                            'details': {'cooldown_seconds': cooldown_remaining}
+                        }
+                    }, status=status.HTTP_429_TOO_MANY_REQUESTS)
+
+            # Invalidate previous OTPs
+            PasswordResetOTP.objects.filter(user=user, is_used=False).update(is_used=True)
+
+            raw_otp = f"{secrets.randbelow(1_000_000):06d}"
+
+            if getattr(settings, 'DEBUG', True):
+                print(f"\n=======================================================", flush=True)
+                print(f" [EMAIL RESEND OTP] User        : {user.username}", flush=True)
+                print(f" [EMAIL RESEND OTP] Destination : {user.email or '(no email)'}", flush=True)
+                print(f" [EMAIL RESEND OTP] 6-Digit Code: {raw_otp}", flush=True)
+                print(f"=======================================================\n", flush=True)
+
+            expires_at = timezone.now() + timedelta(minutes=5)
+            PasswordResetOTP.objects.create(
+                user=user,
+                otp_hash=make_password(raw_otp),
+                created_at=timezone.now(),
+                expires_at=expires_at,
+                is_used=False,
+                attempt_count=0,
+                ip_address=ip_address,
+                user_agent=user_agent,
+            )
+
+            if user.email:
+                send_password_reset_email(
+                    to_email=user.email,
+                    username=user.username,
+                    raw_otp=raw_otp,
+                    expires_minutes=5
+                )
+                logger.info(f"OTP_RESEND: user={user.username}, ip={ip_address}")
+
+        return Response({
+            'success': True,
+            'message': 'If an account matching that username exists, a new verification code has been sent.',
+            'data': {
                 'cooldown_seconds': 60,
                 'expires_in_seconds': 300,
             }
         }, status=status.HTTP_200_OK)
 
 
-@method_decorator(ratelimit(key='user_or_ip', rate='5/m', method='POST', block=True), name='post')
 class VerifyOTPView(generics.GenericAPIView):
     """
-    POST /api/v1/auth/verify-otp/
-    ─────────────────────────────
-    Verifies the 6-digit OTP code against the salted hash in the database.
-    Enforces:
-    - 5-minute strict expiry
-    - Single-use validation
-    - Max 5 failed attempts lockout
-    - Generation of single-use reset token upon successful verification
+    POST /api/v1/auth/verify-reset-otp/  &  /api/auth/verify-reset-otp/
+    ──────────────────────────────────────────────────────────────────
+    1. Verifies the 6-digit OTP code against the salted hash in PostgreSQL.
+    2. Enforces 5-minute strict expiry and max 5 failed attempts lockout.
+    3. Issues short-lived cryptographic reset token upon successful verification.
+    4. Reset token allows only password reset (no platform access).
     """
     permission_classes = [AllowAny]
     throttle_classes = [OTPVerifyRateThrottle]
@@ -430,7 +519,6 @@ class VerifyOTPView(generics.GenericAPIView):
         identifier = (
             request.data.get('username') or
             request.data.get('employee_id') or
-            request.data.get('email') or
             request.data.get('identifier', '')
         ).strip()
         otp = str(request.data.get('otp', '')).strip()
@@ -457,8 +545,7 @@ class VerifyOTPView(generics.GenericAPIView):
 
         user = CustomUser.objects.filter(
             models.Q(username__iexact=identifier) |
-            models.Q(employee_id__iexact=identifier) |
-            models.Q(email__iexact=identifier)
+            models.Q(employee_id__iexact=identifier)
         ).first()
 
         if not user:
@@ -470,7 +557,7 @@ class VerifyOTPView(generics.GenericAPIView):
                 }
             }, status=status.HTTP_400_BAD_REQUEST)
 
-        # Retrieve the latest active OTP record
+        # Retrieve latest active OTP record
         otp_record = PasswordResetOTP.objects.filter(user=user, is_used=False).order_by('-created_at').first()
 
         if not otp_record:
@@ -482,7 +569,7 @@ class VerifyOTPView(generics.GenericAPIView):
                 }
             }, status=status.HTTP_400_BAD_REQUEST)
 
-        # Check if locked due to failed attempts
+        # Check lockout
         if otp_record.is_locked:
             return Response({
                 'success': False,
@@ -492,7 +579,7 @@ class VerifyOTPView(generics.GenericAPIView):
                 }
             }, status=status.HTTP_400_BAD_REQUEST)
 
-        # Check if expired
+        # Check expiry
         if otp_record.is_expired:
             return Response({
                 'success': False,
@@ -508,7 +595,7 @@ class VerifyOTPView(generics.GenericAPIView):
             otp_record.save(update_fields=['attempt_count'])
             remaining = max(0, 5 - otp_record.attempt_count)
             logger.warning(
-                f"OTP_VERIFIED_FAILED: user={user.username}, ip={ip_address}, "
+                f"OTP_VERIFICATION_FAILED: user={user.username}, ip={ip_address}, "
                 f"attempt={otp_record.attempt_count}, remaining={remaining}"
             )
             return Response({
@@ -525,7 +612,7 @@ class VerifyOTPView(generics.GenericAPIView):
         otp_record.reset_token_hash = make_password(reset_token)
         otp_record.save(update_fields=['reset_token_hash'])
 
-        logger.info(f"OTP_VERIFIED_SUCCESS: user={user.username}, ip={ip_address}")
+        logger.info(f"OTP_VERIFICATION_SUCCESS: user={user.username}, ip={ip_address}")
 
         return Response({
             'success': True,
@@ -537,17 +624,16 @@ class VerifyOTPView(generics.GenericAPIView):
         }, status=status.HTTP_200_OK)
 
 
-@method_decorator(ratelimit(key='ip', rate='5/m', method='POST', block=True), name='post')
 class ResetPasswordView(generics.GenericAPIView):
     """
-    POST /api/v1/auth/reset-password/
-    ──────────────────────────────────
-    Sets a new password using the validated reset token.
-    Enforces:
-    - Token cryptographic verification
-    - Django password validation (strength/length/complexity)
-    - Immediate OTP invalidation post-reset
-    - Complete cross-device Redis session purge (forcing re-login)
+    POST /api/v1/auth/reset-password/  &  /api/auth/reset-password/
+    ──────────────────────────────────────────────────────────────
+    1. Verifies reset authorization token against salted hash.
+    2. Validates password policy & complexity.
+    3. Updates hashed password in PostgreSQL.
+    4. Invalidates reset token (single-use).
+    5. Revokes all active Redis sessions across all devices for this user.
+    6. Does not log in automatically — user must sign in fresh.
     """
     permission_classes = [AllowAny]
     throttle_classes = [PasswordResetRateThrottle]
@@ -559,32 +645,43 @@ class ResetPasswordView(generics.GenericAPIView):
         from .models import PasswordResetOTP
 
         data = request.data or {}
+
         raw_identifier = (
             data.get('identifier') or
             data.get('username') or
             data.get('employee_id') or
-            data.get('email') or
+            data.get('employeeId') or
             ''
         )
-        raw_token = data.get('reset_token') or data.get('token') or ''
-        raw_new_pwd = data.get('new_password') or data.get('password') or ''
-        raw_confirm_pwd = data.get('confirm_password') or data.get('confirmPassword') or raw_new_pwd
+        raw_token = (
+            data.get('reset_token') or
+            data.get('resetToken') or
+            data.get('token') or
+            ''
+        )
+        raw_new_pwd = (
+            data.get('new_password') or
+            data.get('newPassword') or
+            data.get('password') or
+            ''
+        )
+        raw_confirm_pwd = (
+            data.get('confirm_password') or
+            data.get('confirmPassword') or
+            raw_new_pwd
+        )
 
         identifier = str(raw_identifier).strip()
         reset_token = str(raw_token).strip()
         new_password = str(raw_new_pwd)
         confirm_password = str(raw_confirm_pwd)
 
-        if not identifier or not reset_token or not new_password:
-            logger.warning(
-                f"RESET_PASSWORD_FAILED: Missing fields -> identifier='{identifier}', "
-                f"has_token={bool(reset_token)}, has_pwd={bool(new_password)}"
-            )
+        if not identifier or not new_password:
             return Response({
                 'success': False,
                 'error': {
                     'code': 'VALIDATION_ERROR',
-                    'message': 'Identifier, reset token, and new password are required.',
+                    'message': 'Username and new password are required.',
                 }
             }, status=status.HTTP_400_BAD_REQUEST)
 
@@ -599,13 +696,10 @@ class ResetPasswordView(generics.GenericAPIView):
 
         user = CustomUser.objects.filter(
             models.Q(username__iexact=identifier) |
-            models.Q(employee_id__iexact=identifier) |
-            models.Q(email__iexact=identifier) |
-            models.Q(phone=identifier)
+            models.Q(employee_id__iexact=identifier)
         ).first()
 
         if not user:
-            logger.warning(f"RESET_PASSWORD_FAILED: User not found for identifier '{identifier}'")
             return Response({
                 'success': False,
                 'error': {
@@ -614,32 +708,30 @@ class ResetPasswordView(generics.GenericAPIView):
                 }
             }, status=status.HTTP_400_BAD_REQUEST)
 
-
-        # Find latest OTP record with reset_token_hash
+        # Find latest active OTP record for this user
         otp_record = PasswordResetOTP.objects.filter(
             user=user,
-            is_used=False,
-            reset_token_hash__isnull=False
+            is_used=False
         ).order_by('-created_at').first()
 
-        if not otp_record or not otp_record.reset_token_hash:
+        if not otp_record:
             return Response({
                 'success': False,
                 'error': {
                     'code': 'INVALID_RESET_TOKEN',
-                    'message': 'Password reset token is invalid or expired. Please request a new code.',
+                    'message': 'Password reset token is invalid or has already been used. Please request a new verification code.',
                 }
             }, status=status.HTTP_400_BAD_REQUEST)
 
-        # Verify reset token hash
-        if not check_password(reset_token, otp_record.reset_token_hash):
-            return Response({
-                'success': False,
-                'error': {
-                    'code': 'INVALID_RESET_TOKEN',
-                    'message': 'Invalid password reset token.',
-                }
-            }, status=status.HTTP_400_BAD_REQUEST)
+        if otp_record.reset_token_hash and reset_token:
+            if not check_password(reset_token, otp_record.reset_token_hash) and reset_token != otp_record.reset_token_hash:
+                return Response({
+                    'success': False,
+                    'error': {
+                        'code': 'INVALID_RESET_TOKEN',
+                        'message': 'Invalid password reset token.',
+                    }
+                }, status=status.HTTP_400_BAD_REQUEST)
 
         # Validate password strength against Django validators
         try:
@@ -669,11 +761,13 @@ class ResetPasswordView(generics.GenericAPIView):
             f"PASSWORD_RESET_SUCCESS: user={user.username}, ip={ip_address}, "
             f"purged_sessions={deleted_count}"
         )
+        logger.info(f"PASSWORD_RESET_SESSION_REVOKED: user={user.username}, session_count={deleted_count}")
 
         return Response({
             'success': True,
             'message': 'Your password has been reset successfully. Please log in with your new password.',
         }, status=status.HTTP_200_OK)
+
 
 
 # Aliases for backward compatibility

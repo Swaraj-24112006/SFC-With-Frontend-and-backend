@@ -13,6 +13,7 @@ from .views import (
     PasswordChangeView,
     ForgotPasswordRequestView,
     VerifyOTPView,
+    ResendOTPView,
     ResetPasswordView,
     PasswordResetRequestView,
     OTPVerifyView,
@@ -31,9 +32,12 @@ urlpatterns = [
     path('register/', RegisterView.as_view(), name='register'),
     path('logout/', LogoutView.as_view(), name='logout'),
 
-    # Password reset via SMS OTP (Standard Checklist Endpoints)
+    # Password reset via Email OTP (Specification Endpoints)
     path('forgot-password/', ForgotPasswordRequestView.as_view(), name='forgot-password'),
+    path('verify-reset-otp/', VerifyOTPView.as_view(), name='verify-reset-otp'),
     path('verify-otp/', VerifyOTPView.as_view(), name='verify-otp'),
+    path('resend-reset-otp/', ResendOTPView.as_view(), name='resend-reset-otp'),
+    path('resend-otp/', ResendOTPView.as_view(), name='resend-otp'),
     path('reset-password/', ResetPasswordView.as_view(), name='reset-password'),
 
     # Backward compatibility aliases

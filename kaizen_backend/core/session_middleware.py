@@ -30,19 +30,14 @@ logger = logging.getLogger(__name__)
 
 # ── Paths that are always allowed without a Redis session ─────────────────────
 EXEMPT_PREFIXES = (
-    "/api/v1/auth/login/",
-    "/api/v1/auth/register/",
-    "/api/v1/auth/forgot-password/",
-    "/api/v1/auth/verify-otp/",
-    "/api/v1/auth/reset-password/",
-    "/api/v1/auth/password/reset/",
-    "/api/v1/auth/otp/verify/",
-    "/api/v1/auth/token/refresh/",
+    "/api/v1/auth/",
+    "/api/auth/",
     "/api/v1/health/",
     "/admin/",
     "/media/",
     "/static/",
 )
+
 
 # ── Only protect these path prefixes ─────────────────────────────────────────
 PROTECTED_PREFIX = "/api/v1/"

@@ -18,9 +18,10 @@ import { RoleCategory, KaizenSubTab, canAccessTab, getRoleBadge } from './utils/
 interface AppProps {
   loggedInUser?: AuthUser | null;
   onLogout?: () => void;
+  onBackToLanding?: () => void;
 }
 
-export default function App({ loggedInUser, onLogout }: AppProps = {}) {
+export default function App({ loggedInUser, onLogout, onBackToLanding }: AppProps = {}) {
   const [persona, setPersona] = useState<UserPersona>('manager');
 
   // Logout handler — calls backend, clears tokens, returns to login screen
@@ -772,9 +773,22 @@ export default function App({ loggedInUser, onLogout }: AppProps = {}) {
               <Menu className="w-4 h-4" />
               <span>SFMS MENU</span>
             </button>
-            <span className="text-xs font-bold font-mono text-emerald-400 uppercase tracking-wider">
-              SHOPFLOOR MS
-            </span>
+            <div className="flex items-center space-x-2">
+              {onBackToLanding && (
+                <button
+                  type="button"
+                  onClick={onBackToLanding}
+                  className="flex items-center space-x-1 px-2.5 py-1 bg-slate-800 hover:bg-[#4C7FFF] rounded-lg text-[11px] font-semibold text-slate-200"
+                  title="Back to KSPG Cockpit"
+                >
+                  <Compass className="w-3.5 h-3.5 text-[#4C7FFF]" />
+                  <span>Cockpit</span>
+                </button>
+              )}
+              <span className="text-xs font-bold font-mono text-emerald-400 uppercase tracking-wider">
+                SHOPFLOOR MS
+              </span>
+            </div>
           </div>
         )}
 
@@ -799,16 +813,30 @@ export default function App({ loggedInUser, onLogout }: AppProps = {}) {
               </span>
             </div>
           </div>
-          <button
-            id="logout-btn"
-            type="button"
-            onClick={handleLogout}
-            className="flex items-center space-x-1.5 px-3 py-1 bg-slate-800 hover:bg-rose-900 border border-slate-700 hover:border-rose-700 rounded-lg text-[11px] font-semibold text-slate-300 hover:text-rose-300 transition-all duration-200 cursor-pointer"
-            title="Sign out"
-          >
-            <ShieldAlert className="w-3 h-3" />
-            <span>Logout</span>
-          </button>
+          <div className="flex items-center space-x-2">
+            {onBackToLanding && (
+              <button
+                id="back-to-landing-btn"
+                type="button"
+                onClick={onBackToLanding}
+                className="flex items-center space-x-1.5 px-3 py-1 bg-slate-800 hover:bg-[#0652d2] border border-slate-700 hover:border-[#4C7FFF] rounded-lg text-[11px] font-semibold text-slate-200 hover:text-white transition-all duration-200 cursor-pointer shadow-xs"
+                title="Back to KSPG Cockpit Application Selection"
+              >
+                <Compass className="w-3.5 h-3.5 text-[#4C7FFF] group-hover:text-white" />
+                <span>← Back to Cockpit</span>
+              </button>
+            )}
+            <button
+              id="logout-btn"
+              type="button"
+              onClick={handleLogout}
+              className="flex items-center space-x-1.5 px-3 py-1 bg-slate-800 hover:bg-rose-900 border border-slate-700 hover:border-rose-700 rounded-lg text-[11px] font-semibold text-slate-300 hover:text-rose-300 transition-all duration-200 cursor-pointer"
+              title="Sign out"
+            >
+              <ShieldAlert className="w-3 h-3" />
+              <span>Logout</span>
+            </button>
+          </div>
         </div>
 
         {/* Main Body content renderer */}

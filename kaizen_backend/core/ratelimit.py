@@ -87,9 +87,20 @@ class LoginUserRateThrottle(SimpleRateThrottle):
         return f"throttle_login_account_{get_client_ip(request)}"
 
 
+class ForgotPasswordRateThrottle(SimpleRateThrottle):
+    """
+    Forgot Password: 3 requests / 10 min / IP or account.
+    """
+    scope = 'password_reset'
+
+    def get_cache_key(self, request, view):
+        ip = get_client_ip(request)
+        return f"throttle_forgot_pwd_{ip}"
+
+
 class PasswordResetRateThrottle(SimpleRateThrottle):
     """
-    Password Reset: 3 requests/minute/IP.
+    Password Reset: 5 requests / 10 min / IP.
     """
     scope = 'password_reset'
 
@@ -100,13 +111,27 @@ class PasswordResetRateThrottle(SimpleRateThrottle):
 
 class OTPVerifyRateThrottle(SimpleRateThrottle):
     """
-    OTP Verification: 5 attempts/minute/user or IP.
+    OTP Verification: 5 attempts / 5 min / user or IP.
     """
     scope = 'otp_verify'
 
     def get_cache_key(self, request, view):
         ident = get_user_or_ip(request)
         return f"throttle_otp_{ident}"
+
+
+class ResendOTPRateThrottle(SimpleRateThrottle):
+    """
+    Resend OTP: 1 request / 60 seconds / IP or user.
+    """
+    scope = 'resend_otp'
+
+    def get_cache_key(self, request, view):
+        username = request.data.get('username') if hasattr(request, 'data') else None
+        if username:
+            return f"throttle_resend_otp_{username.strip().lower()}"
+        return f"throttle_resend_otp_{get_client_ip(request)}"
+
 
 
 class FileUploadRateThrottle(SimpleRateThrottle):

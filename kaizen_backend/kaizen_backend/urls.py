@@ -13,8 +13,9 @@ urlpatterns = [
     # Admin panel
     path('admin/', admin.site.urls),
 
-    # API v1 endpoints
+    # API endpoints
     path('api/v1/auth/', include('accounts.urls')),
+    path('api/auth/', include('accounts.urls')),
     path('api/v1/', include('kaizens.urls')),
     path('api/v1/', include('workflow.urls')),
     path('api/v1/', include('impact.urls')),

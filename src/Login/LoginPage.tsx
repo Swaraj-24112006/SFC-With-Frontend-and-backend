@@ -21,15 +21,14 @@ export default function LoginPage({ onLoginSuccess }: LoginPageProps) {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
+  const [rememberMe, setRememberMe] = useState(false);
   const [loginState, setLoginState] = useState<LoginState>('idle');
   const [errorMessage, setErrorMessage] = useState('');
-  const [focusedField, setFocusedField] = useState<'username' | 'password' | null>(null);
-  const [isForgotModalOpen, setIsForgotModalOpen] = useState(false);
+  const [isForgotPasswordOpen, setIsForgotPasswordOpen] = useState(false);
 
-  // Reset error when user starts typing again
+  // Clear error when user edits inputs
   useEffect(() => {
     if (errorMessage) setErrorMessage('');
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [username, password]);
 
   const handleSubmit = useCallback(
@@ -38,17 +37,13 @@ export default function LoginPage({ onLoginSuccess }: LoginPageProps) {
 
       const cleanUsername = sanitiseUsername(username);
 
-      // ── Client-side guard ─────────────────────────────────────────
+      // Client-side validation
       if (!cleanUsername) {
-        setErrorMessage('Please enter your username or employee ID.');
+        setErrorMessage('Please enter your Operator ID or Username.');
         return;
       }
       if (!password) {
-        setErrorMessage('Please enter your password.');
-        return;
-      }
-      if (password.length < 8) {
-        setErrorMessage('Invalid credentials. Please check and try again.');
+        setErrorMessage('Please enter your Access Key.');
         return;
       }
 
@@ -56,39 +51,56 @@ export default function LoginPage({ onLoginSuccess }: LoginPageProps) {
       setErrorMessage('');
 
       try {
-        // ── Call Django SecureLoginView ────────────────────────────────────
         const res = await fetch('/api/v1/auth/login/', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          credentials: 'include',   // ← required: browser must store kspg_sid HttpOnly cookie
+          credentials: 'include', // Stores kspg_sid HttpOnly session cookie
           body: JSON.stringify({ username: cleanUsername, password }),
         });
 
-        // Parse JSON body regardless of status
         let body: any = null;
         const contentType = res.headers.get('content-type') || '';
         if (contentType.includes('application/json')) {
           body = await res.json();
         }
 
+        // ── Rate Limiting (429 Too Many Requests) ──────────────────────────
+        if (res.status === 429) {
+          setLoginState('error');
+          setErrorMessage(
+            body?.detail ||
+              body?.error?.message ||
+              'Rate limit exceeded. Maximum 5 login attempts per minute. Please wait before retrying.'
+          );
+          setTimeout(() => setLoginState('idle'), 5000);
+          return;
+        }
+
         if (res.ok && (body?.access || body?.data?.tokens?.access)) {
-          // ── Store tokens ────────────────────────────────────────
           const tokens = body?.data?.tokens ?? body;
           saveTokens({ access: tokens.access, refresh: tokens.refresh || '' });
 
-          // ── User is in body.data.user (new LoginView) ───────────
           let user: AuthUser | null = null;
-
           const rawFromLogin = body?.data?.user;
           if (rawFromLogin) {
             const rawCategory = rawFromLogin.roleCategory || rawFromLogin.role_category;
-            const roleName = rawFromLogin.roleDetail?.name || rawFromLogin.role_detail?.name || rawFromLogin.roleName || rawFromLogin.role_name || '';
-            
-            // Map to normalized category if not explicit
+            const roleName =
+              rawFromLogin.roleDetail?.name ||
+              rawFromLogin.role_detail?.name ||
+              rawFromLogin.roleName ||
+              rawFromLogin.role_name ||
+              '';
+
             let category: 'initiator' | 'coordinator' | 'committee' | 'admin' = 'initiator';
             if (rawCategory === 'admin' || roleName === 'admin') category = 'admin';
             else if (rawCategory === 'coordinator' || roleName === 'kaizen_lead') category = 'coordinator';
-            else if (rawCategory === 'committee' || roleName === 'reviewer' || roleName === 'cft_member' || roleName === 'verifier') category = 'committee';
+            else if (
+              rawCategory === 'committee' ||
+              roleName === 'reviewer' ||
+              roleName === 'cft_member' ||
+              roleName === 'verifier'
+            )
+              category = 'committee';
 
             user = {
               id: rawFromLogin.id,
@@ -99,7 +111,9 @@ export default function LoginPage({ onLoginSuccess }: LoginPageProps) {
               full_name:
                 rawFromLogin.fullName ||
                 rawFromLogin.full_name ||
-                `${rawFromLogin.firstName || rawFromLogin.first_name || ''} ${rawFromLogin.lastName || rawFromLogin.last_name || ''}`.trim() ||
+                `${rawFromLogin.firstName || rawFromLogin.first_name || ''} ${
+                  rawFromLogin.lastName || rawFromLogin.last_name || ''
+                }`.trim() ||
                 cleanUsername,
               employee_id: rawFromLogin.employeeId || rawFromLogin.employee_id || '',
               department: rawFromLogin.department || '',
@@ -110,7 +124,7 @@ export default function LoginPage({ onLoginSuccess }: LoginPageProps) {
             };
           }
 
-          // ── Fallback: fetch profile if user not in login body ────
+          // Fallback profile query if user details weren't in login payload
           if (!user) {
             try {
               const profileRes = await fetch('/api/v1/auth/profile/', {
@@ -124,12 +138,23 @@ export default function LoginPage({ onLoginSuccess }: LoginPageProps) {
                 const profileBody = await profileRes.json();
                 const rawUser = profileBody?.data ?? profileBody;
                 const rawCategory = rawUser.roleCategory || rawUser.role_category;
-                const roleName = rawUser.roleDetail?.name || rawUser.role_detail?.name || rawUser.roleName || rawUser.role_name || '';
-                
+                const roleName =
+                  rawUser.roleDetail?.name ||
+                  rawUser.role_detail?.name ||
+                  rawUser.roleName ||
+                  rawUser.role_name ||
+                  '';
+
                 let category: 'initiator' | 'coordinator' | 'committee' | 'admin' = 'initiator';
                 if (rawCategory === 'admin' || roleName === 'admin') category = 'admin';
                 else if (rawCategory === 'coordinator' || roleName === 'kaizen_lead') category = 'coordinator';
-                else if (rawCategory === 'committee' || roleName === 'reviewer' || roleName === 'cft_member' || roleName === 'verifier') category = 'committee';
+                else if (
+                  rawCategory === 'committee' ||
+                  roleName === 'reviewer' ||
+                  roleName === 'cft_member' ||
+                  roleName === 'verifier'
+                )
+                  category = 'committee';
 
                 user = {
                   id: rawUser.id,
@@ -140,7 +165,9 @@ export default function LoginPage({ onLoginSuccess }: LoginPageProps) {
                   full_name:
                     rawUser.fullName ||
                     rawUser.full_name ||
-                    `${rawUser.firstName || rawUser.first_name || ''} ${rawUser.lastName || rawUser.last_name || ''}`.trim() ||
+                    `${rawUser.firstName || rawUser.first_name || ''} ${
+                      rawUser.lastName || rawUser.last_name || ''
+                    }`.trim() ||
                     cleanUsername,
                   employee_id: rawUser.employeeId || rawUser.employee_id || '',
                   department: rawUser.department || '',
@@ -151,7 +178,7 @@ export default function LoginPage({ onLoginSuccess }: LoginPageProps) {
                 };
               }
             } catch {
-              // Profile fetch failed — build minimal user
+              // Ignore profile fetch failure
             }
           }
 
@@ -175,701 +202,512 @@ export default function LoginPage({ onLoginSuccess }: LoginPageProps) {
           saveUser(user);
           setLoginState('success');
 
-          // Brief "Access Granted" visual before redirecting
+          // Smooth transition to SFMS Landing Page
           setTimeout(() => {
             onLoginSuccess(user!);
-          }, 900);
+          }, 600);
         } else {
-          // ── Generic error — never reveal which field is wrong ───
           setLoginState('error');
           setErrorMessage(
-            'Invalid credentials. Please check your username and password and try again.'
+            body?.error?.message ||
+              'Access denied. Invalid operator ID or access key.'
           );
-          setTimeout(() => setLoginState('idle'), 3000);
+          setTimeout(() => setLoginState('idle'), 3500);
         }
       } catch {
         setLoginState('error');
-        setErrorMessage(
-          'Unable to reach the authentication server. Please try again shortly.'
-        );
-        setTimeout(() => setLoginState('idle'), 3000);
+        setErrorMessage('Unable to connect to authentication server. Please check your network.');
+        setTimeout(() => setLoginState('idle'), 3500);
       }
     },
     [username, password, onLoginSuccess]
   );
 
-  // ─── Derived UI state ───────────────────────────────────────────────────────
-  const isLoading = loginState === 'loading';
-  const isSuccess = loginState === 'success';
-  const isError = loginState === 'error';
-  const isDisabled = isLoading || isSuccess;
-
   return (
     <div
-      className="login-page-root"
+      className="login-viewport"
       style={{
-        minHeight: '100dvh',
-        background: 'radial-gradient(ellipse at 15% 15%, rgba(106,123,217,0.18) 0, transparent 55%), radial-gradient(ellipse at 85% 85%, rgba(4,217,139,0.12) 0, transparent 55%), #0b0d2c',
-        display: 'flex',
-        flexDirection: 'column',
-        fontFamily: "'Hanken Grotesk', 'Inter', sans-serif",
-        color: '#e1e3e4',
+        minHeight: '100vh',
+        width: '100%',
         position: 'relative',
         overflow: 'hidden',
+        fontFamily: "'Hanken Grotesk', sans-serif",
+        color: '#0a1128',
+        backgroundColor: '#ffffff',
+        backgroundImage: `linear-gradient(rgba(0, 0, 0, 0.35), rgba(0, 0, 0, 0.35)), url("https://lh3.googleusercontent.com/aida-public/AB6AXuAs9oxr-9KGLKZpV4zN8cRNI4U1jaqebc034STW_P4jUhu70xRNJeRzOX-WBRTH3W3lvHYUVwXWLBFRn-jPoU_-DEEuPL5KmRZwORBPmWSIPT5VoQue-bAdLJ8ZEVG4bmv0TwWP9Vhd54at-_inyJTSmkfsfs1OgCNTWhNpKGCSc35qEampon1Lvfz_ofS5--zzMx6-ah_iTYhY1UgBHCP7GKf1XQ2OwLiV9jrPEj221Q58zt3jALsMxxIE_YO_e02M4g")`,
+        backgroundSize: 'cover',
+        backgroundPosition: 'center center',
+        backgroundAttachment: 'fixed',
+        display: 'flex',
+        flexDirection: 'column',
+        justifyContent: 'center',
+        alignItems: 'center',
       }}
     >
-      {/* ── Blueprint Grid Overlay ───────────────────────────────── */}
-      <div
-        aria-hidden="true"
-        style={{
-          position: 'fixed',
-          inset: 0,
-          backgroundImage:
-            'linear-gradient(rgba(255,255,255,0.025) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.025) 1px, transparent 1px)',
-          backgroundSize: '36px 36px',
-          pointerEvents: 'none',
-          zIndex: 0,
-          opacity: 0.3,
-        }}
-      />
+      {/* ── Orbit Rings ──────────────────────────────────────────────────────── */}
+      <div className="orbit-ring ring-1" />
+      <div className="orbit-ring ring-2" />
 
-      {/* ── Ambient light blobs ──────────────────────────────────── */}
-      <div
-        aria-hidden="true"
-        style={{
-          position: 'fixed',
-          top: '-10%',
-          left: '-10%',
-          width: 'clamp(280px, 45vw, 650px)',
-          height: 'clamp(280px, 45vw, 650px)',
-          borderRadius: '50%',
-          background: 'rgba(106,123,217,0.10)',
-          filter: 'blur(120px)',
-          pointerEvents: 'none',
-          zIndex: 0,
-        }}
-      />
-      <div
-        aria-hidden="true"
-        style={{
-          position: 'fixed',
-          bottom: '-10%',
-          right: '-10%',
-          width: 'clamp(280px, 50vw, 700px)',
-          height: 'clamp(280px, 50vw, 700px)',
-          borderRadius: '50%',
-          background: 'rgba(4,217,139,0.08)',
-          filter: 'blur(140px)',
-          pointerEvents: 'none',
-          zIndex: 0,
-        }}
-      />
+      {/* ── Background Marquee Ribbons ────────────────────────────────────────── */}
+      <div className="marquee-container marquee-1">
+        KAIZEN // 5S // RED FLAG // PPSR // 5M // KSPG COCKPIT // KAIZEN // 5S // RED FLAG // PPSR // 5M // KSPG COCKPIT
+      </div>
+      <div className="marquee-container marquee-2">
+        KSPG COCKPIT // 5M // PPSR // RED FLAG // 5S // KAIZEN // KSPG COCKPIT // 5M // PPSR // RED FLAG // 5S // KAIZEN
+      </div>
+      <div className="marquee-container marquee-3">
+        RED FLAG // KAIZEN // KSPG COCKPIT // 5M // PPSR // 5S // RED FLAG // KAIZEN // KSPG COCKPIT // 5M // PPSR // 5S
+      </div>
 
-      {/* ── HEADER ──────────────────────────────────────────────────── */}
-      <header
+      {/* ── Liquid Glass Login Card ───────────────────────────────────────────── */}
+      <div
+        className="login-card"
         style={{
+          position: 'relative',
+          zIndex: 10,
           width: '100%',
-          background: 'rgba(14,17,54,0.82)',
+          maxWidth: '440px',
+          padding: '2.5rem 2rem',
+          margin: '1rem',
+          background: 'rgba(255, 255, 255, 0.88)',
           backdropFilter: 'blur(16px)',
           WebkitBackdropFilter: 'blur(16px)',
-          borderBottom: '1px solid rgba(255,255,255,0.10)',
-          position: 'sticky',
-          top: 0,
-          zIndex: 50,
+          borderRadius: '2rem',
+          boxShadow: '0 20px 60px rgba(0, 0, 0, 0.15), 0 0 30px rgba(76, 127, 255, 0.1)',
+          border: '1px solid rgba(255, 255, 255, 0.7)',
+          display: 'flex',
+          flexDirection: 'column',
+          gap: '1.75rem',
         }}
       >
+        {/* Card Header */}
         <div
           style={{
-            maxWidth: 1280,
-            margin: '0 auto',
-            padding: '14px 24px',
             display: 'flex',
+            flexDirection: 'column',
             alignItems: 'center',
-            justifyContent: 'space-between',
+            gap: '0.35rem',
+            borderBottom: '1px dashed #d1d5db',
+            paddingBottom: '1.25rem',
+            textAlign: 'center',
           }}
         >
-          {/* Brand */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-            <div
-              style={{
-                width: 40,
-                height: 40,
-                borderRadius: 12,
-                background: 'rgba(186,195,255,0.10)',
-                border: '1px solid rgba(186,195,255,0.25)',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                fontSize: 22,
-              }}
-            >
-              🚀
-            </div>
-            <div>
-              <div
-                style={{
-                  fontFamily: "'Manrope', sans-serif",
-                  fontWeight: 800,
-                  fontSize: 'clamp(15px, 2.5vw, 20px)',
-                  color: '#fff',
-                  letterSpacing: '-0.3px',
-                  lineHeight: 1.1,
-                }}
-              >
-                KSPG <span style={{ color: '#bac3ff' }}>Cockpit</span>
-              </div>
-              <div
-                style={{
-                  fontFamily: "'JetBrains Mono', monospace",
-                  fontSize: 9,
-                  color: 'rgba(197,197,212,0.65)',
-                  textTransform: 'uppercase',
-                  letterSpacing: '0.12em',
-                }}
-              >
-                Shop Floor Management
-              </div>
-            </div>
-          </div>
-
-          {/* Status badge */}
           <div
             style={{
+              fontFamily: "'JetBrains Mono', monospace",
+              fontSize: '11px',
+              fontWeight: 600,
+              letterSpacing: '0.18em',
+              color: '#4C7FFF',
+              textTransform: 'uppercase',
+            }}
+          >
+            KSPG COCKPIT // LIVE
+          </div>
+          <h1
+            style={{
+              fontFamily: "'Hanken Grotesk', sans-serif",
+              fontSize: '26px',
+              fontWeight: 700,
+              color: '#0a1128',
+              margin: 0,
+              letterSpacing: '-0.02em',
+            }}
+          >
+            System Access
+          </h1>
+        </div>
+
+        {/* Error Alert Box */}
+        {errorMessage && (
+          <div
+            style={{
+              background: 'rgba(254, 226, 226, 0.95)',
+              border: '1px solid #f87171',
+              color: '#991b1b',
+              borderRadius: '0.85rem',
+              padding: '0.75rem 1rem',
+              fontSize: '13px',
+              fontWeight: 500,
               display: 'flex',
               alignItems: 'center',
-              gap: 6,
-              fontSize: 11,
-              color: 'rgba(197,197,212,0.70)',
-              fontFamily: "'JetBrains Mono', monospace",
+              gap: '0.5rem',
+              animation: 'fadeIn 0.25s ease-in-out',
             }}
           >
-            <span
-              style={{
-                width: 7,
-                height: 7,
-                borderRadius: '50%',
-                background: '#04D98B',
-                animation: 'kspg-pulse 2.4s ease-in-out infinite',
-                display: 'inline-block',
-              }}
-            />
-            SYSTEM ONLINE
+            <span className="material-symbols-outlined" style={{ fontSize: '18px' }}>
+              warning
+            </span>
+            <span>{errorMessage}</span>
           </div>
-        </div>
-      </header>
+        )}
 
-      {/* ── MAIN ────────────────────────────────────────────────────── */}
-      <main
-        style={{
-          flex: 1,
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          padding: 'clamp(16px, 4vw, 48px)',
-          position: 'relative',
-          zIndex: 1,
-        }}
-      >
-        {/* Login Card */}
-        <div
-          style={{
-            width: '100%',
-            maxWidth: 460,
-            background: 'rgba(20,26,60,0.82)',
-            backdropFilter: 'blur(20px)',
-            WebkitBackdropFilter: 'blur(20px)',
-            border: '1px solid rgba(255,255,255,0.12)',
-            borderRadius: 20,
-            borderTop: '4px solid #6A7BD9',
-            boxShadow: '0 24px 48px -12px rgba(0,0,0,0.65), 0 0 28px rgba(106,123,217,0.15)',
-            padding: 'clamp(24px, 5vw, 44px)',
-            position: 'relative',
-            overflow: 'hidden',
-          }}
-        >
-          {/* Card ambient accent */}
-          <div
-            aria-hidden
-            style={{
-              position: 'absolute',
-              top: 0,
-              right: 0,
-              width: 140,
-              height: 140,
-              background: 'rgba(106,123,217,0.10)',
-              borderRadius: '0 0 0 100%',
-              filter: 'blur(24px)',
-              pointerEvents: 'none',
-            }}
-          />
-          <div
-            aria-hidden
-            style={{
-              position: 'absolute',
-              bottom: -32,
-              left: -32,
-              width: 112,
-              height: 112,
-              background: 'rgba(4,217,139,0.08)',
-              borderRadius: '0 100% 0 0',
-              filter: 'blur(20px)',
-              pointerEvents: 'none',
-            }}
-          />
-
-          {/* ── Card Header ──────────────────────────────────────── */}
-          <div style={{ textAlign: 'center', marginBottom: 32, position: 'relative', zIndex: 1 }}>
-            <div
-              style={{
-                display: 'inline-flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                width: 64,
-                height: 64,
-                borderRadius: 18,
-                background: 'rgba(12,15,46,0.90)',
-                border: '1px solid rgba(255,255,255,0.14)',
-                marginBottom: 18,
-                boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.08)',
-              }}
-            >
-              <span
-                style={{
-                  fontSize: 30,
-                  animation: 'kspg-pulse 2.4s ease-in-out infinite',
-                  display: 'block',
-                  lineHeight: 1,
-                }}
-              >
-                🔐
-              </span>
-            </div>
-
-            <h1
-              style={{
-                fontFamily: "'Manrope', sans-serif",
-                fontWeight: 800,
-                fontSize: 'clamp(20px, 4vw, 28px)',
-                color: '#fff',
-                letterSpacing: '-0.4px',
-                margin: '0 0 6px',
-              }}
-            >
-              SYSTEM LOGIN
-            </h1>
-            <p
-              style={{
-                fontFamily: "'JetBrains Mono', monospace",
-                fontSize: 10,
-                color: 'rgba(197,197,212,0.75)',
-                textTransform: 'uppercase',
-                letterSpacing: '0.14em',
-                margin: 0,
-              }}
-            >
-              Mission Control Authentication
-            </p>
-          </div>
-
-          {/* ── Error Banner ─────────────────────────────────────── */}
-          {(isError || errorMessage) && (
-            <div
-              role="alert"
-              style={{
-                background: 'rgba(147,0,10,0.20)',
-                border: '1px solid rgba(255,180,171,0.30)',
-                borderRadius: 10,
-                padding: '10px 14px',
-                marginBottom: 20,
-                display: 'flex',
-                alignItems: 'flex-start',
-                gap: 10,
-                fontSize: 13,
-                color: '#ffdad6',
-                lineHeight: 1.45,
-                animation: 'kspg-slide-in 0.25s ease',
-              }}
-            >
-              <span style={{ fontSize: 16, flexShrink: 0, marginTop: 1 }}>⚠️</span>
-              <span>{errorMessage}</span>
-            </div>
-          )}
-
-          {/* ── Form ─────────────────────────────────────────────── */}
-          <form
-            id="loginForm"
-            onSubmit={handleSubmit}
-            noValidate
-            style={{ position: 'relative', zIndex: 1 }}
-          >
-            {/* Username Field */}
-            <div style={{ marginBottom: 18 }}>
-              <label
-                htmlFor="login-username"
-                style={{
-                  display: 'block',
-                  fontFamily: "'JetBrains Mono', monospace",
-                  fontSize: 11,
-                  fontWeight: 600,
-                  color: 'rgba(197,197,212,0.80)',
-                  textTransform: 'uppercase',
-                  letterSpacing: '0.10em',
-                  marginBottom: 8,
-                }}
-              >
-                Username / Employee ID
-              </label>
-              <div style={{ position: 'relative' }}>
-                <span
-                  style={{
-                    position: 'absolute',
-                    left: 14,
-                    top: '50%',
-                    transform: 'translateY(-50%)',
-                    fontSize: 18,
-                    color: focusedField === 'username' ? '#bac3ff' : 'rgba(197,197,212,0.45)',
-                    transition: 'color 0.2s',
-                    pointerEvents: 'none',
-                    lineHeight: 1,
-                  }}
-                >
-                  👤
-                </span>
-                <input
-                  id="login-username"
-                  name="username"
-                  type="text"
-                  autoComplete="username"
-                  required
-                  disabled={isDisabled}
-                  value={username}
-                  onChange={e => setUsername(e.target.value)}
-                  onFocus={() => setFocusedField('username')}
-                  onBlur={() => setFocusedField(null)}
-                  placeholder="Enter operator ID or username"
-                  aria-label="Username or Employee ID"
-                  style={{
-                    width: '100%',
-                    background: 'rgba(12,15,42,0.85)',
-                    border: `1px solid ${
-                      focusedField === 'username'
-                        ? '#6A7BD9'
-                        : 'rgba(255,255,255,0.13)'
-                    }`,
-                    borderRadius: 12,
-                    padding: '12px 14px 12px 42px',
-                    color: '#f1f3f5',
-                    fontSize: 14,
-                    fontFamily: "'Hanken Grotesk', sans-serif",
-                    outline: 'none',
-                    boxSizing: 'border-box',
-                    boxShadow:
-                      focusedField === 'username'
-                        ? '0 0 0 3px rgba(106,123,217,0.22)'
-                        : 'none',
-                    transition: 'border-color 0.2s, box-shadow 0.2s',
-                    opacity: isDisabled ? 0.6 : 1,
-                  }}
-                />
-              </div>
-            </div>
-
-            {/* Password Field */}
-            <div style={{ marginBottom: 28 }}>
-              <label
-                htmlFor="login-password"
-                style={{
-                  display: 'block',
-                  fontFamily: "'JetBrains Mono', monospace",
-                  fontSize: 11,
-                  fontWeight: 600,
-                  color: 'rgba(197,197,212,0.80)',
-                  textTransform: 'uppercase',
-                  letterSpacing: '0.10em',
-                  marginBottom: 8,
-                }}
-              >
-                Passcode
-              </label>
-              <div style={{ position: 'relative' }}>
-                <span
-                  style={{
-                    position: 'absolute',
-                    left: 14,
-                    top: '50%',
-                    transform: 'translateY(-50%)',
-                    fontSize: 17,
-                    color: focusedField === 'password' ? '#bac3ff' : 'rgba(197,197,212,0.45)',
-                    transition: 'color 0.2s',
-                    pointerEvents: 'none',
-                    lineHeight: 1,
-                  }}
-                >
-                  🔑
-                </span>
-                <input
-                  id="login-password"
-                  name="password"
-                  type={showPassword ? 'text' : 'password'}
-                  autoComplete="current-password"
-                  required
-                  disabled={isDisabled}
-                  value={password}
-                  onChange={e => setPassword(e.target.value)}
-                  onFocus={() => setFocusedField('password')}
-                  onBlur={() => setFocusedField(null)}
-                  placeholder="••••••••••••"
-                  aria-label="Password or Passcode"
-                  style={{
-                    width: '100%',
-                    background: 'rgba(12,15,42,0.85)',
-                    border: `1px solid ${
-                      focusedField === 'password'
-                        ? '#6A7BD9'
-                        : 'rgba(255,255,255,0.13)'
-                    }`,
-                    borderRadius: 12,
-                    padding: '12px 44px 12px 42px',
-                    color: '#f1f3f5',
-                    fontSize: 14,
-                    fontFamily: "'Hanken Grotesk', sans-serif",
-                    outline: 'none',
-                    boxSizing: 'border-box',
-                    boxShadow:
-                      focusedField === 'password'
-                        ? '0 0 0 3px rgba(106,123,217,0.22)'
-                        : 'none',
-                    transition: 'border-color 0.2s, box-shadow 0.2s',
-                    opacity: isDisabled ? 0.6 : 1,
-                    letterSpacing: showPassword ? 'normal' : '0.1em',
-                  }}
-                />
-                {/* Toggle visibility button */}
-                <button
-                  type="button"
-                  id="togglePasswordBtn"
-                  onClick={() => setShowPassword(v => !v)}
-                  disabled={isDisabled}
-                  aria-label={showPassword ? 'Hide password' : 'Show password'}
-                  title={showPassword ? 'Hide passcode' : 'Show passcode'}
-                  style={{
-                    position: 'absolute',
-                    right: 10,
-                    top: '50%',
-                    transform: 'translateY(-50%)',
-                    background: 'none',
-                    border: 'none',
-                    cursor: 'pointer',
-                    padding: 4,
-                    borderRadius: 6,
-                    color: 'rgba(197,197,212,0.55)',
-                    fontSize: 18,
-                    lineHeight: 1,
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                  }}
-                >
-                  {showPassword ? '🙈' : '👁'}
-                </button>
-              </div>
-            </div>
-
-            {/* Forgot Passcode Link */}
-            <div
-              style={{
-                display: 'flex',
-                justifyContent: 'space-between',
-                alignItems: 'center',
-                marginBottom: 24,
-                marginTop: -16,
-              }}
-            >
-              <span
-                style={{
-                  fontSize: 11,
-                  color: 'rgba(197,197,212,0.5)',
-                  fontFamily: "'JetBrains Mono', monospace",
-                }}
-              >
-                SMS OTP Verified
-              </span>
-              <button
-                type="button"
-                id="forgotPasscodeBtn"
-                onClick={() => setIsForgotModalOpen(true)}
-                disabled={isDisabled}
-                style={{
-                  background: 'none',
-                  border: 'none',
-                  color: '#8898ee',
-                  fontSize: 12,
-                  fontFamily: "'JetBrains Mono', monospace",
-                  fontWeight: 600,
-                  cursor: isDisabled ? 'not-allowed' : 'pointer',
-                  padding: 0,
-                  transition: 'color 0.2s',
-                  textDecoration: 'underline',
-                  textUnderlineOffset: 3,
-                }}
-              >
-                Forgot Passcode?
-              </button>
-            </div>
-
-            {/* Submit Button */}
-            <button
-              id="submitBtn"
-              type="submit"
-              disabled={isDisabled}
+        {/* Login Form */}
+        <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
+          {/* Username / Operator ID Field */}
+          <div className="input-group" style={{ position: 'relative' }}>
+            <input
+              id="username"
+              type="text"
+              value={username}
+              onChange={e => setUsername(e.target.value)}
+              disabled={loginState === 'loading' || loginState === 'success'}
+              placeholder=" "
+              required
+              autoFocus
+              className="peer neumorphic-input"
               style={{
                 width: '100%',
-                padding: '14px 20px',
-                borderRadius: 12,
-                border: 'none',
-                cursor: isDisabled ? 'not-allowed' : 'pointer',
-                fontFamily: "'Manrope', sans-serif",
-                fontWeight: 700,
-                fontSize: 13,
+                background: '#ffffff',
+                borderRadius: '1rem',
+                boxShadow: 'inset 4px 4px 8px #d9d9d9, inset -4px -4px 8px #ffffff',
+                border: '1px solid transparent',
+                padding: '1.25rem 1.25rem 0.6rem 1.25rem',
+                fontSize: '15px',
+                fontFamily: "'Hanken Grotesk', sans-serif",
+                color: '#0a1128',
+                outline: 'none',
+                boxSizing: 'border-box',
+                transition: 'all 0.2s ease',
+              }}
+            />
+            <label
+              htmlFor="username"
+              style={{
+                position: 'absolute',
+                left: '1.25rem',
+                top: '0.95rem',
+                color: '#6b7280',
+                fontFamily: "'JetBrains Mono', monospace",
+                fontSize: '11px',
+                fontWeight: 600,
+                letterSpacing: '0.08em',
                 textTransform: 'uppercase',
-                letterSpacing: '0.10em',
+                pointerEvents: 'none',
+                transition: 'all 0.2s ease',
+              }}
+              className="peer-focus:top-[4px] peer-focus:text-[10px] peer-focus:text-[#4C7FFF] peer-not-placeholder-shown:top-[4px] peer-not-placeholder-shown:text-[10px] peer-not-placeholder-shown:text-[#4C7FFF]"
+            >
+              OPERATOR_ID / USERNAME
+            </label>
+          </div>
+
+          {/* Password / Access Key Field */}
+          <div className="input-group" style={{ position: 'relative' }}>
+            <input
+              id="password"
+              type={showPassword ? 'text' : 'password'}
+              value={password}
+              onChange={e => setPassword(e.target.value)}
+              disabled={loginState === 'loading' || loginState === 'success'}
+              placeholder=" "
+              required
+              className="peer neumorphic-input"
+              style={{
+                width: '100%',
+                background: '#ffffff',
+                borderRadius: '1rem',
+                boxShadow: 'inset 4px 4px 8px #d9d9d9, inset -4px -4px 8px #ffffff',
+                border: '1px solid transparent',
+                padding: '1.25rem 3rem 0.6rem 1.25rem',
+                fontSize: '15px',
+                fontFamily: "'Hanken Grotesk', sans-serif",
+                color: '#0a1128',
+                outline: 'none',
+                boxSizing: 'border-box',
+                transition: 'all 0.2s ease',
+              }}
+            />
+            <label
+              htmlFor="password"
+              style={{
+                position: 'absolute',
+                left: '1.25rem',
+                top: '0.95rem',
+                color: '#6b7280',
+                fontFamily: "'JetBrains Mono', monospace",
+                fontSize: '11px',
+                fontWeight: 600,
+                letterSpacing: '0.08em',
+                textTransform: 'uppercase',
+                pointerEvents: 'none',
+                transition: 'all 0.2s ease',
+              }}
+              className="peer-focus:top-[4px] peer-focus:text-[10px] peer-focus:text-[#4C7FFF] peer-not-placeholder-shown:top-[4px] peer-not-placeholder-shown:text-[10px] peer-not-placeholder-shown:text-[#4C7FFF]"
+            >
+              ACCESS_KEY / PASSWORD
+            </label>
+            <button
+              type="button"
+              onClick={() => setShowPassword(!showPassword)}
+              style={{
+                position: 'absolute',
+                right: '1rem',
+                top: '50%',
+                transform: 'translateY(-50%)',
+                background: 'none',
+                border: 'none',
+                color: showPassword ? '#4C7FFF' : '#9ca3af',
+                cursor: 'pointer',
+                padding: '4px',
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
-                gap: 10,
-                transition: 'all 0.25s cubic-bezier(0.4,0,0.2,1)',
-                background: isSuccess
-                  ? 'linear-gradient(135deg, #04D98B 0%, #00995c 100%)'
-                  : isError
-                  ? 'linear-gradient(135deg, #93000a 0%, #6d0005 100%)'
-                  : 'linear-gradient(135deg, #6A7BD9 0%, #5263c9 100%)',
-                color: '#fff',
-                boxShadow: isDisabled
-                  ? 'none'
-                  : '0 4px 20px rgba(106,123,217,0.35)',
-                opacity: isDisabled && !isSuccess && !isError ? 0.75 : 1,
-                transform: isLoading ? 'scale(0.99)' : 'scale(1)',
+                outline: 'none',
               }}
+              title={showPassword ? 'Hide password' : 'Show password'}
             >
-              <span id="btnText">
-                {isLoading
-                  ? 'Authenticating...'
-                  : isSuccess
-                  ? 'Access Granted'
-                  : isError
-                  ? 'Authentication Failed'
-                  : 'Initialize Sequence'}
-              </span>
-              <span
-                id="btnIcon"
-                style={{
-                  fontSize: 18,
-                  animation: isLoading ? 'kspg-spin 1s linear infinite' : 'none',
-                }}
-              >
-                {isLoading ? '⚙' : isSuccess ? '✓' : isError ? '✕' : '→'}
+              <span className="material-symbols-outlined" style={{ fontSize: '20px' }}>
+                {showPassword ? 'visibility_off' : 'visibility'}
               </span>
             </button>
-          </form>
-        </div>
-      </main>
-
-      {/* ── FOOTER ──────────────────────────────────────────────────── */}
-      <footer
-        style={{
-          width: '100%',
-          background: 'rgba(10,12,40,0.60)',
-          borderTop: '1px solid rgba(255,255,255,0.05)',
-          backdropFilter: 'blur(8px)',
-          position: 'relative',
-          zIndex: 1,
-        }}
-      >
-        <div
-          style={{
-            maxWidth: 1280,
-            margin: '0 auto',
-            padding: '20px 24px',
-            display: 'flex',
-            flexWrap: 'wrap',
-            justifyContent: 'space-between',
-            alignItems: 'center',
-            gap: 12,
-          }}
-        >
-          <div
-            style={{
-              fontFamily: "'JetBrains Mono', monospace",
-              fontSize: 11,
-              color: 'rgba(197,197,212,0.75)',
-              letterSpacing: '0.08em',
-            }}
-          >
-            © 2026 KSPG Cockpit · Mission Control Systems & Shopfloor Analytics
           </div>
+
+          {/* Options Row (Remember Me) */}
           <div
             style={{
               display: 'flex',
+              justifyContent: 'space-between',
               alignItems: 'center',
-              gap: 6,
-              fontSize: 11,
-              color: 'rgba(197,197,212,0.70)',
-              fontFamily: "'JetBrains Mono', monospace",
+              padding: '0 0.25rem',
             }}
           >
-            <span
+            <label
               style={{
-                width: 7,
-                height: 7,
-                borderRadius: '50%',
-                background: '#04D98B',
-                animation: 'kspg-pulse 2.4s ease-in-out infinite',
-                display: 'inline-block',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '0.5rem',
+                cursor: 'pointer',
+                fontFamily: "'JetBrains Mono', monospace",
+                fontSize: '11px',
+                color: '#4b5563',
+                userSelect: 'none',
               }}
-            />
-            System Status: Operational
+            >
+              <input
+                type="checkbox"
+                checked={rememberMe}
+                onChange={e => setRememberMe(e.target.checked)}
+                style={{
+                  accentColor: '#4C7FFF',
+                  width: '14px',
+                  height: '14px',
+                  cursor: 'pointer',
+                }}
+              />
+              REMEMBER_SESSION
+            </label>
+
+            <button
+              type="button"
+              onClick={() => setIsForgotPasswordOpen(true)}
+              style={{
+                background: 'none',
+                border: 'none',
+                fontFamily: "'JetBrains Mono', monospace",
+                fontSize: '10px',
+                letterSpacing: '0.08em',
+                color: '#4C7FFF',
+                cursor: 'pointer',
+                textDecoration: 'underline',
+              }}
+            >
+              FORGOT_PASSWORD?
+            </button>
           </div>
+
+          {/* Submit Button */}
+          <button
+            type="submit"
+            disabled={loginState === 'loading' || loginState === 'success'}
+            className="btn-glow"
+            style={{
+              width: '100%',
+              background:
+                loginState === 'success'
+                  ? '#10b981'
+                  : 'linear-gradient(135deg, #4C7FFF 0%, #3b66db 100%)',
+              color: '#ffffff',
+              fontFamily: "'JetBrains Mono', monospace",
+              fontSize: '12px',
+              fontWeight: 700,
+              letterSpacing: '0.12em',
+              textTransform: 'uppercase',
+              padding: '1rem',
+              borderRadius: '1rem',
+              border: 'none',
+              cursor: loginState === 'loading' ? 'wait' : 'pointer',
+              boxShadow: '0 8px 20px rgba(76, 127, 255, 0.28)',
+              display: 'flex',
+              justifyContent: 'center',
+              alignItems: 'center',
+              gap: '0.5rem',
+              marginTop: '0.5rem',
+              transition: 'all 0.25s ease',
+            }}
+          >
+            {loginState === 'loading' && (
+              <>
+                <span className="material-symbols-outlined animate-spin" style={{ fontSize: '18px' }}>
+                  progress_activity
+                </span>
+                VERIFYING PROTOCOLS...
+              </>
+            )}
+            {loginState === 'success' && (
+              <>
+                <span className="material-symbols-outlined" style={{ fontSize: '18px' }}>
+                  check_circle
+                </span>
+                ACCESS GRANTED // REDIRECTING...
+              </>
+            )}
+            {loginState === 'idle' && (
+              <>
+                INITIATE SEQUENCE
+                <span className="material-symbols-outlined" style={{ fontSize: '16px' }}>
+                  terminal
+                </span>
+              </>
+            )}
+            {loginState === 'error' && (
+              <>
+                RETRY AUTHENTICATION
+                <span className="material-symbols-outlined" style={{ fontSize: '16px' }}>
+                  refresh
+                </span>
+              </>
+            )}
+          </button>
+        </form>
+
+        {/* Decorative Overlay */}
+        <div
+          style={{
+            position: 'absolute',
+            inset: 0,
+            zIndex: -1,
+            opacity: 0.05,
+            mixBlendMode: 'overlay',
+            pointerEvents: 'none',
+            borderRadius: '2rem',
+            backgroundImage:
+              "url('https://lh3.googleusercontent.com/aida-public/AB6AXuCDHwyiDj-v1NqKcam-Zfg5xIQlfrmbEhfTXY8v4F-nXBWbKOK40dD9HOMZ9xeFoapkfTOi_muM6aYIK4pPytZMC9UEqzUoaEduU3r1G6Wg3kYyPpYZoPTbXbdJfKY6FguPVTIKzCN7HCdGBsxLe-XyDO0sQC9s4Lxr53ZFPJmloN1EoCm0Jqxef52dp4Fs5cwE24tw6I1PhU2SNhOrYvA7OzLbON5Kae1b1gQz4Wg_MTktRvUW2ARZBqz5VRJeGZIG9w')",
+            backgroundSize: 'cover',
+            backgroundPosition: 'center',
+          }}
+        />
+      </div>
+
+      {/* ── Fixed Footer ──────────────────────────────────────────────────────── */}
+      <footer
+        style={{
+          position: 'fixed',
+          bottom: 0,
+          width: '100%',
+          zIndex: 40,
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          padding: '0.6rem 2rem',
+          borderTop: '1px solid rgba(229, 231, 235, 0.8)',
+          background: 'rgba(255, 255, 255, 0.85)',
+          backdropFilter: 'blur(8px)',
+          WebkitBackdropFilter: 'blur(8px)',
+          fontSize: '11px',
+          fontFamily: "'JetBrains Mono', monospace",
+          color: '#6b7280',
+          boxSizing: 'border-box',
+        }}
+      >
+        <span>© 2026 KSPG OPERATIONS // KAIZEN PROTOCOL</span>
+        <div style={{ display: 'flex', gap: '1.5rem', alignItems: 'center' }}>
+          <span className="hidden md:inline">CONFIDENTIAL - INTERNAL OPERATIONS REVIEW</span>
+          <span style={{ color: '#4C7FFF', fontWeight: 600 }}>SYSTEM STATUS: NOMINAL</span>
         </div>
       </footer>
 
-      {/* ── Keyframe Animations ──────────────────────────────────────── */}
+      {/* ── Inline CSS Animations & Utilities ─────────────────────────────────── */}
       <style>{`
-        @import url('https://fonts.googleapis.com/css2?family=Hanken+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&family=Manrope:wght@600;700;800&display=swap');
-
-        @keyframes kspg-pulse {
-          0%, 100% { opacity: 1; transform: scale(1); }
-          50%       { opacity: 0.65; transform: scale(1.08); }
+        .orbit-ring {
+          position: absolute;
+          border-radius: 50%;
+          border: 1px dashed rgba(10, 17, 40, 0.12);
+          top: 50%;
+          left: 50%;
+          transform: translate(-50%, -50%);
+          pointer-events: none;
+          z-index: 1;
         }
-        @keyframes kspg-spin {
+        .ring-1 { width: 580px; height: 580px; }
+        .ring-2 { width: 840px; height: 840px; }
+
+        .marquee-container {
+          overflow: hidden;
+          white-space: nowrap;
+          position: absolute;
+          width: 100%;
+          opacity: 0.05;
+          font-family: 'Hanken Grotesk', sans-serif;
+          font-weight: 800;
+          font-size: 7.5rem;
+          color: transparent;
+          -webkit-text-stroke: 1px #0a1128;
+          pointer-events: none;
+          user-select: none;
+          z-index: 1;
+        }
+        .marquee-1 { top: 8%; animation: kspg-scroll-left 60s linear infinite; }
+        .marquee-2 { top: 42%; animation: kspg-scroll-right 70s linear infinite; }
+        .marquee-3 { top: 74%; animation: kspg-scroll-left 65s linear infinite; }
+
+        @keyframes kspg-scroll-left {
+          0% { transform: translateX(0); }
+          100% { transform: translateX(-50%); }
+        }
+        @keyframes kspg-scroll-right {
+          0% { transform: translateX(-50%); }
+          100% { transform: translateX(0); }
+        }
+
+        .btn-glow:hover:not(:disabled) {
+          box-shadow: 0 0 22px rgba(76, 127, 255, 0.5) !important;
+          transform: translateY(-1px);
+        }
+
+        .neumorphic-input:focus {
+          border-color: #4C7FFF !important;
+          box-shadow: inset 3px 3px 6px #d9d9d9, inset -3px -3px 6px #ffffff, 0 0 0 3px rgba(76, 127, 255, 0.15) !important;
+        }
+
+        @keyframes fadeIn {
+          from { opacity: 0; transform: translateY(-4px); }
+          to { opacity: 1; transform: translateY(0); }
+        }
+
+        .animate-spin {
+          animation: spin 1s linear infinite;
+        }
+        @keyframes spin {
           from { transform: rotate(0deg); }
-          to   { transform: rotate(360deg); }
-        }
-        @keyframes kspg-slide-in {
-          from { opacity: 0; transform: translateY(-6px); }
-          to   { opacity: 1; transform: translateY(0); }
+          to { transform: rotate(360deg); }
         }
 
-        #login-username::placeholder,
-        #login-password::placeholder {
-          color: rgba(197,197,212,0.40);
-        }
-        #login-username:disabled,
-        #login-password:disabled {
-          cursor: not-allowed;
+        @media (max-width: 640px) {
+          .ring-1 { width: 340px; height: 340px; }
+          .ring-2 { width: 480px; height: 480px; }
+          .marquee-container { font-size: 4.5rem; }
+          footer { font-size: 9px !important; padding: 0.5rem 1rem !important; }
         }
       `}</style>
 
-      {/* ── Forgot Passcode Modal ────────────────────────────────────────── */}
       <ForgotPasswordModal
-        isOpen={isForgotModalOpen}
-        onClose={() => setIsForgotModalOpen(false)}
+        isOpen={isForgotPasswordOpen}
         initialIdentifier={username}
-        onSuccessReturn={recoveredUsername => {
-          if (recoveredUsername) {
-            setUsername(recoveredUsername);
-          }
-          setPassword('');
-          setErrorMessage('');
+        onClose={() => setIsForgotPasswordOpen(false)}
+        onSuccessReturn={resetUser => {
+          if (resetUser) setUsername(resetUser);
+          setIsForgotPasswordOpen(false);
         }}
       />
     </div>

@@ -4,7 +4,7 @@ interface ForgotPasswordModalProps {
   isOpen: boolean;
   onClose: () => void;
   initialIdentifier?: string;
-  onSuccessReturn: (username: string) => void;
+  onSuccessReturn?: (username: string) => void;
 }
 
 type Step = 'request' | 'verify' | 'reset' | 'success';
@@ -18,7 +18,7 @@ export default function ForgotPasswordModal({
   // Wizard state
   const [step, setStep] = useState<Step>('request');
   const [identifier, setIdentifier] = useState(initialIdentifier);
-  const [maskedPhone, setMaskedPhone] = useState('');
+  const [maskedEmail, setMaskedEmail] = useState('');
   const [otp, setOtp] = useState(['', '', '', '', '', '']);
   const [resetToken, setResetToken] = useState('');
   const [newPassword, setNewPassword] = useState('');
@@ -29,24 +29,27 @@ export default function ForgotPasswordModal({
   const [isLoading, setIsLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
   const [cooldownSeconds, setCooldownSeconds] = useState(0);
-  const [expirySeconds, setExpirySeconds] = useState(0);
 
   const otpInputsRef = useRef<(HTMLInputElement | null)[]>([]);
   const prevIsOpenRef = useRef(false);
+  const resetTokenRef = useRef('');
+  const identifierRef = useRef('');
 
-  // Sync initial identifier ONLY when modal opens (not on subsequent re-renders)
+  // Sync initial identifier when modal opens
   useEffect(() => {
     if (isOpen && !prevIsOpenRef.current) {
       setStep('request');
-      setIdentifier(initialIdentifier || '');
+      const initial = initialIdentifier || sessionStorage.getItem('kspg_reset_user') || '';
+      setIdentifier(initial);
+      identifierRef.current = initial;
       setOtp(['', '', '', '', '', '']);
       setNewPassword('');
       setConfirmPassword('');
       setErrorMessage('');
       setResetToken('');
-      setMaskedPhone('');
+      resetTokenRef.current = '';
+      setMaskedEmail('');
       setCooldownSeconds(0);
-      setExpirySeconds(0);
     }
     prevIsOpenRef.current = isOpen;
   }, [isOpen, initialIdentifier]);
@@ -54,24 +57,22 @@ export default function ForgotPasswordModal({
   // Timers countdown
   useEffect(() => {
     let interval: NodeJS.Timeout;
-    if (cooldownSeconds > 0 || expirySeconds > 0) {
+    if (cooldownSeconds > 0) {
       interval = setInterval(() => {
         setCooldownSeconds(prev => (prev > 0 ? prev - 1 : 0));
-        setExpirySeconds(prev => (prev > 0 ? prev - 1 : 0));
       }, 1000);
     }
     return () => clearInterval(interval);
-  }, [cooldownSeconds, expirySeconds]);
-
+  }, [cooldownSeconds]);
 
   if (!isOpen) return null;
 
   // ── Handlers ─────────────────────────────────────────────────────────────
 
-  // Step 1: Request OTP via SMS
+  // Step 1: Request OTP via Email
   const handleRequestOtp = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
-    const clean = identifier.trim();
+    const clean = identifier.trim() || identifierRef.current.trim();
     if (!clean) {
       setErrorMessage('Please enter your Username or Employee ID.');
       return;
@@ -81,19 +82,20 @@ export default function ForgotPasswordModal({
     setErrorMessage('');
 
     try {
+      identifierRef.current = clean;
+      sessionStorage.setItem('kspg_reset_user', clean);
+      localStorage.setItem('kspg_reset_user', clean);
+
       const res = await fetch('/api/v1/auth/forgot-password/', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ identifier: clean }),
+        body: JSON.stringify({ identifier: clean, username: clean }),
       });
 
       const data = await res.json();
 
       if (res.ok && data.success) {
-        const phone = data?.data?.masked_phone || '+XX ••••• ••XXXX';
-        setMaskedPhone(phone);
-        setCooldownSeconds(data?.data?.cooldown_seconds || 60);
-        setExpirySeconds(data?.data?.expires_in_seconds || 300);
+        setCooldownSeconds(data?.data?.cooldown_seconds || 15);
         setStep('verify');
       } else {
         const msg = data?.error?.message || 'Failed to dispatch verification code. Please try again.';
@@ -150,11 +152,19 @@ export default function ForgotPasswordModal({
     setErrorMessage('');
 
     try {
+      const currentIdentifier =
+        identifier.trim() ||
+        identifierRef.current.trim() ||
+        sessionStorage.getItem('kspg_reset_user') ||
+        localStorage.getItem('kspg_reset_user') ||
+        '';
+
       const res = await fetch('/api/v1/auth/verify-otp/', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          identifier: identifier.trim(),
+          identifier: currentIdentifier,
+          username: currentIdentifier,
           otp: fullOtp,
         }),
       });
@@ -162,13 +172,30 @@ export default function ForgotPasswordModal({
       const data = await res.json();
 
       if (res.ok && data.success) {
-        const token = data?.data?.reset_token;
-        const verifiedUsername = data?.data?.username;
+        const token =
+          data?.data?.resetToken ||
+          data?.data?.reset_token ||
+          data?.resetToken ||
+          data?.reset_token ||
+          data?.token ||
+          '';
+        const verifiedUsername =
+          data?.data?.username ||
+          data?.data?.userName ||
+          data?.username ||
+          data?.userName ||
+          currentIdentifier;
         if (token) {
           setResetToken(token);
+          resetTokenRef.current = token;
+          sessionStorage.setItem('kspg_reset_token', token);
+          localStorage.setItem('kspg_reset_token', token);
         }
         if (verifiedUsername) {
           setIdentifier(verifiedUsername);
+          identifierRef.current = verifiedUsername;
+          sessionStorage.setItem('kspg_reset_user', verifiedUsername);
+          localStorage.setItem('kspg_reset_user', verifiedUsername);
         }
         setStep('reset');
       } else {
@@ -197,11 +224,20 @@ export default function ForgotPasswordModal({
       setErrorMessage('Passwords do not match. Please re-enter.');
       return;
     }
-    if (!resetToken) {
-      setErrorMessage('Verification session expired or missing. Please verify your SMS code again.');
-      setStep('verify');
-      return;
-    }
+
+    const currentToken =
+      resetToken ||
+      resetTokenRef.current ||
+      sessionStorage.getItem('kspg_reset_token') ||
+      localStorage.getItem('kspg_reset_token') ||
+      '';
+
+    const currentIdentifier =
+      identifier.trim() ||
+      identifierRef.current.trim() ||
+      sessionStorage.getItem('kspg_reset_user') ||
+      localStorage.getItem('kspg_reset_user') ||
+      initialIdentifier.trim();
 
     setIsLoading(true);
     setErrorMessage('');
@@ -211,36 +247,38 @@ export default function ForgotPasswordModal({
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          identifier: identifier.trim(),
-          username: identifier.trim(),
-          reset_token: resetToken,
-          token: resetToken,
+          identifier: currentIdentifier,
+          username: currentIdentifier,
+          employee_id: currentIdentifier,
+          employeeId: currentIdentifier,
+          reset_token: currentToken,
+          resetToken: currentToken,
+          token: currentToken,
           new_password: newPassword,
+          newPassword: newPassword,
+          password: newPassword,
           confirm_password: confirmPassword,
+          confirmPassword: confirmPassword,
         }),
       });
 
       const data = await res.json();
 
       if (res.ok && data.success) {
+        sessionStorage.removeItem('kspg_reset_token');
+        sessionStorage.removeItem('kspg_reset_user');
+        localStorage.removeItem('kspg_reset_token');
+        localStorage.removeItem('kspg_reset_user');
         setStep('success');
       } else {
-        const msg = data?.error?.message || 'Password reset failed. Please restart the process.';
+        const msg = data?.error?.message || 'Password reset failed. Please try again.';
         setErrorMessage(msg);
       }
-
     } catch {
       setErrorMessage('Network error updating password. Please try again.');
     } finally {
       setIsLoading(false);
     }
-  };
-
-  // Format expiry seconds into mm:ss
-  const formatTimer = (sec: number) => {
-    const m = Math.floor(sec / 60);
-    const s = sec % 60;
-    return `${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
   };
 
   return (
@@ -328,10 +366,10 @@ export default function ForgotPasswordModal({
               letterSpacing: '-0.02em',
             }}
           >
-            {step === 'request' && 'Passcode Recovery'}
+            {step === 'request' && 'Password Recovery'}
             {step === 'verify' && 'Enter Verification Code'}
-            {step === 'reset' && 'Create New Passcode'}
-            {step === 'success' && 'Passcode Restored'}
+            {step === 'reset' && 'Create New Password'}
+            {step === 'success' && 'Password Restored'}
           </h2>
           <p
             style={{
@@ -342,9 +380,9 @@ export default function ForgotPasswordModal({
               marginBottom: 0,
             }}
           >
-            {step === 'request' && 'Verify your identity via registered SMS OTP'}
-            {step === 'verify' && `SMS dispatched to ${maskedPhone}`}
-            {step === 'reset' && 'Set a strong, 8+ character passcode'}
+            {step === 'request' && 'Verify your identity via registered email OTP'}
+            {step === 'verify' && '6-digit OTP sent to your registered email address'}
+            {step === 'reset' && 'Set a strong, 8+ character password'}
             {step === 'success' && 'Your security credentials are updated'}
           </p>
         </div>
@@ -430,7 +468,7 @@ export default function ForgotPasswordModal({
                 type="text"
                 value={identifier}
                 onChange={e => setIdentifier(e.target.value)}
-                placeholder="e.g. EMP-001 or initiator1"
+                placeholder="e.g. test_user_1 or dev_initiator"
                 required
                 disabled={isLoading}
                 autoFocus
@@ -471,7 +509,7 @@ export default function ForgotPasswordModal({
                 gap: 8,
               }}
             >
-              {isLoading ? 'Dispatching OTP...' : 'Send SMS Verification Code →'}
+              {isLoading ? 'Dispatching OTP...' : 'Send Verification Code →'}
             </button>
           </form>
         )}
@@ -496,16 +534,7 @@ export default function ForgotPasswordModal({
                     textTransform: 'uppercase',
                   }}
                 >
-                  6-Digit SMS Code
-                </span>
-                <span
-                  style={{
-                    fontFamily: "'JetBrains Mono', monospace",
-                    fontSize: 11,
-                    color: expirySeconds > 0 ? '#bac3ff' : '#ffb4ab',
-                  }}
-                >
-                  ⏳ {formatTimer(expirySeconds)}
+                  6-Digit Verification Code
                 </span>
               </div>
 
@@ -584,7 +613,7 @@ export default function ForgotPasswordModal({
               >
                 {cooldownSeconds > 0
                   ? `Resend code in ${cooldownSeconds}s`
-                  : 'Didn’t receive code? Resend SMS'}
+                  : 'Didn’t receive code? Resend Code'}
               </button>
             </div>
           </form>
@@ -605,7 +634,7 @@ export default function ForgotPasswordModal({
                   marginBottom: 6,
                 }}
               >
-                New Passcode
+                New Password
               </label>
               <input
                 type={showPasswords ? 'text' : 'password'}
@@ -641,13 +670,13 @@ export default function ForgotPasswordModal({
                   marginBottom: 6,
                 }}
               >
-                Confirm Passcode
+                Confirm Password
               </label>
               <input
                 type={showPasswords ? 'text' : 'password'}
                 value={confirmPassword}
                 onChange={e => setConfirmPassword(e.target.value)}
-                placeholder="Re-enter new passcode"
+                placeholder="Re-enter new password"
                 required
                 disabled={isLoading}
                 style={{
@@ -677,7 +706,7 @@ export default function ForgotPasswordModal({
                 htmlFor="showPassToggle"
                 style={{ fontSize: 12, color: 'rgba(197,197,212,0.7)', cursor: 'pointer' }}
               >
-                Show passcode characters
+                Show password characters
               </label>
             </div>
 
@@ -700,7 +729,7 @@ export default function ForgotPasswordModal({
                 boxShadow: '0 4px 16px rgba(4, 217, 139, 0.35)',
               }}
             >
-              {isLoading ? 'Updating Passcode...' : 'Reset Passcode & Secure Sessions ✓'}
+              {isLoading ? 'Updating Password...' : 'Reset Password & Finish ✓'}
             </button>
           </form>
         )}
@@ -709,12 +738,14 @@ export default function ForgotPasswordModal({
         {step === 'success' && (
           <div style={{ textAlign: 'center', padding: '10px 0' }}>
             <p style={{ fontSize: 14, color: 'rgba(197,197,212,0.9)', marginBottom: 24 }}>
-              Your passcode has been updated successfully. All previous active sessions across all devices have been terminated.
+              Your password has been updated successfully. All previous active sessions have been terminated.
             </p>
             <button
               type="button"
               onClick={() => {
-                onSuccessReturn(identifier);
+                if (onSuccessReturn) {
+                  onSuccessReturn(identifier);
+                }
                 onClose();
               }}
               style={{

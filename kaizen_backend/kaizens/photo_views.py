@@ -117,6 +117,25 @@ class KaizenPhotoUploadView(APIView):
 
         photo_url = build_photo_url(request, saved_field)
 
+        # Sync to MinIO bucket (kaizenimages)
+        minio_url = None
+        try:
+            from core.minio_utils import get_minio_client, get_presigned_url
+            client = get_minio_client()
+            object_name = saved_field.name
+            image_file.seek(0)
+            client.put_object(
+                bucket_name=settings.MINIO_BUCKET_NAME,
+                object_name=object_name,
+                data=image_file,
+                length=image_file.size,
+                content_type=content_type
+            )
+            minio_url = get_presigned_url(object_name)
+            logger.info(f"MinIO: Synced photo to bucket '{settings.MINIO_BUCKET_NAME}': {object_name}")
+        except Exception as e:
+            logger.warning(f"MinIO sync skipped/failed: {e}")
+
         logger.info(f'Saved {photo_type} photo for Kaizen {kaizen.sr_no}: {saved_field.name}')
 
         return Response({
@@ -126,6 +145,7 @@ class KaizenPhotoUploadView(APIView):
                 'photo_type': photo_type,
                 'file_path': saved_field.name,
                 'url': photo_url,
+                'minio_url': minio_url,
             }
         }, status=drf_status.HTTP_201_CREATED)
 
@@ -188,9 +208,18 @@ class KaizenPhotoDeleteView(APIView):
             except Exception as e:
                 logger.warning(f'Could not delete photo file {file_path}: {e}')
 
+        # Also delete from MinIO bucket
+        try:
+            from core.minio_utils import delete_object
+            delete_object(field.name)
+            logger.info(f"MinIO: Deleted {field.name} from bucket")
+        except Exception as e:
+            logger.warning(f"MinIO delete skipped/failed: {e}")
+
         # Clear DB field
         setattr(kaizen, f'photo_{photo_type}', None)
         kaizen.save(update_fields=[f'photo_{photo_type}'])
+
 
         return Response({
             'success': True,

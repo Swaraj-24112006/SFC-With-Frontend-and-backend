@@ -12,8 +12,7 @@ django-ratelimit==4.1.0
 django-redis==5.4.0
 redis==5.2.1
 
-# SMS & Async Tasks
-twilio==9.11.0
+# Async Tasks
 celery==5.6.3
 
 # Database

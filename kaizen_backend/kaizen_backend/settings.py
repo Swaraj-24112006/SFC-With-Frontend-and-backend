@@ -150,14 +150,6 @@ CELERY_TASK_TRACK_STARTED = True
 CELERY_TASK_ALWAYS_EAGER = config('CELERY_TASK_ALWAYS_EAGER', default=False, cast=bool)
 
 # =============================================================================
-# Twilio SMS Configuration
-# =============================================================================
-TWILIO_ACCOUNT_SID = config('TWILIO_ACCOUNT_SID', default='AC242546d3853dbddcbcd33268966c7d5a')
-TWILIO_AUTH_TOKEN = config('TWILIO_AUTH_TOKEN', default='44bbf206f84b0caa8781c2d5e6fbca45')
-TWILIO_PHONE_NUMBER = config('TWILIO_PHONE_NUMBER', default='+19518779367')
-TWILIO_SENDER_NAME = config('TWILIO_SENDER_NAME', default='KSPG Kaizen')
-
-# =============================================================================
 # Session Security — Redis-backed with HttpOnly / SameSite cookies
 # =============================================================================
 SESSION_COOKIE_AGE = config('SESSION_COOKIE_AGE', default=3600, cast=int)  # 60 min sliding base
@@ -223,14 +215,15 @@ REST_FRAMEWORK = {
         'core.ratelimit.NormalAPIRateThrottle',
     ],
     'DEFAULT_THROTTLE_RATES': {
-        'anon': '60/min',
-        'user': '100/min',
-        'login_ip': '5/min',
-        'login_user': '5/min',
-        'password_reset': '3/min',
-        'otp_verify': '5/min',
-        'file_upload': '10/min',
-        'admin_api': '30/min',
+        'anon': '120/min',
+        'user': '200/min',
+        'login_ip': '30/min',
+        'login_user': '30/min',
+        'password_reset': '60/min',
+        'otp_verify': '60/min',
+        'resend_otp': '60/min',
+        'file_upload': '30/min',
+        'admin_api': '60/min',
     },
     'EXCEPTION_HANDLER': 'core.exceptions.custom_exception_handler',
     'DEFAULT_RENDERER_CLASSES': (
@@ -308,7 +301,7 @@ DATA_UPLOAD_MAX_MEMORY_SIZE = MAX_UPLOAD_SIZE_BYTES
 MINIO_ENDPOINT = config('MINIO_ENDPOINT', default='localhost:9000')
 MINIO_ACCESS_KEY = config('MINIO_ACCESS_KEY', default='minioadmin')
 MINIO_SECRET_KEY = config('MINIO_SECRET_KEY', default='minioadmin')
-MINIO_BUCKET_NAME = config('MINIO_BUCKET_NAME', default='kaizen-images')
+MINIO_BUCKET_NAME = config('MINIO_BUCKET_NAME', default='kaizenimages')
 MINIO_USE_HTTPS = config('MINIO_USE_HTTPS', default=False, cast=bool)
 
 # Uncomment below to switch to MinIO storage in production:
@@ -393,3 +386,15 @@ LOGGING = {
 # Create logs directory if it doesn't exist
 LOGS_DIR = BASE_DIR / 'logs'
 LOGS_DIR.mkdir(exist_ok=True)
+
+# =============================================================================
+# SMTP Email Configuration
+# =============================================================================
+EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
+EMAIL_HOST = config('EMAIL_HOST', default='smtp.gmail.com')
+EMAIL_PORT = config('EMAIL_PORT', default=587, cast=int)
+EMAIL_USE_TLS = config('EMAIL_USE_TLS', default=True, cast=bool)
+EMAIL_HOST_USER = config('EMAIL_HOST_USER', default='')
+EMAIL_HOST_PASSWORD = config('EMAIL_HOST_PASSWORD', default='').replace(' ', '')
+DEFAULT_FROM_EMAIL = config('DEFAULT_FROM_EMAIL', default='KSPG Cockpit <no-reply@kspg.local>')
+
