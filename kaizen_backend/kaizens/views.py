@@ -5,13 +5,16 @@ Kaizen Views — CRUD, Drafts, Submission, Evidence, Cost Savings
 from rest_framework import viewsets, status, generics
 from rest_framework.decorators import action
 from rest_framework.response import Response
-from rest_framework.permissions import AllowAny
+from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.parsers import MultiPartParser, FormParser
 from django.utils import timezone
+from django.db import transaction
 from django.db.models import Sum, Q
 from django.shortcuts import get_object_or_404
 
 from .models import Kaizen, KaizenBenefit, KaizenEvidence, KaizenCostSaving
+from audit.models import create_audit_log
+from core.ratelimit import get_client_ip
 from .serializers import (
     KaizenListSerializer,
     KaizenDetailSerializer,
@@ -30,11 +33,13 @@ from core.rbac import (
     IsCoordinatorOrAdmin,
     IsOwnerOrCommitteeOrAbove,
     get_role_category,
+    PERM_KAIZEN_DELETE_DRAFT,
 )
 
 import logging
 
 logger = logging.getLogger('kaizen')
+
 
 
 class KaizenViewSet(viewsets.ModelViewSet):
@@ -65,13 +70,13 @@ class KaizenViewSet(viewsets.ModelViewSet):
         """
         RBAC enforcement per action:
         - update / partial_update : IsOwnerOrCommitteeOrAbove (draft owner or committee/coordinator/admin)
-        - destroy                 : IsCoordinatorOrAdmin or draft owner
+        - destroy                 : IsAuthenticated (strict authentication required)
         - list / retrieve / create / submit : AllowAny (view logic checks authenticated user)
         """
         if self.action in ('update', 'partial_update'):
             return [IsOwnerOrCommitteeOrAbove()]
-        if self.action in ('destroy',):
-            return [IsOwnerOrCommitteeOrAbove()]
+        if self.action == 'destroy':
+            return [IsAuthenticated()]
         return [AllowAny()]
 
     def get_queryset(self):
@@ -221,28 +226,82 @@ class KaizenViewSet(viewsets.ModelViewSet):
         })
 
     def destroy(self, request, *args, **kwargs):
+        """
+        DELETE /api/v1/kaizens/<id>/
+        Secure Draft Deletion Pipeline:
+        1. Authentication required (enforced via IsAuthenticated).
+        2. Draft status verification (status == 'draft'). Rejects non-drafts with 409 Conflict.
+        3. Ownership & RBAC check:
+           - Initiator: Can only delete their own draft (created_by == request.user).
+           - Coordinator / Admin: Can delete across their administrative scope.
+           - Rejects unauthorized users with 403 Forbidden.
+        4. Backend atomic database transaction with immutable audit trail logging.
+        """
         instance = self.get_object()
 
-        if not instance.is_deletable:
+        # 1. State Check: Only drafts can be deleted
+        if instance.status != 'draft':
             raise KaizenAPIException(
-                message='Only draft Kaizens can be deleted.',
-                code='NOT_DELETABLE',
-                status_code=403,
+                message=f'Cannot delete Kaizen with status "{instance.get_status_display()}". Only draft Kaizens can be deleted.',
+                code='INVALID_DRAFT_STATE',
+                status_code=status.HTTP_409_CONFLICT,
+                details={'current_status': instance.status, 'allowed_status': 'draft'}
             )
 
+        # 2. RBAC & Ownership Validation
         user_role = get_role_category(request.user)
-        if instance.created_by != request.user and user_role not in ('coordinator', 'admin'):
+        is_owner = (instance.created_by == request.user)
+        is_admin_or_coordinator = user_role in ('coordinator', 'admin')
+
+        if not is_owner and not is_admin_or_coordinator:
+            logger.warning(
+                f"Unauthorized draft deletion attempt: user={request.user.username} (role={user_role}) "
+                f"attempted to delete draft {instance.sr_no} owned by {instance.created_by.username if instance.created_by else 'None'}"
+            )
             raise KaizenAPIException(
-                message='You can only delete your own drafts.',
+                message='Access denied. You do not have permission to delete this Kaizen draft. You can only delete your own drafts.',
                 code='PERMISSION_DENIED',
-                status_code=403,
+                status_code=status.HTTP_403_FORBIDDEN,
             )
 
-        instance.delete()
+        # 3. Atomic Deletion and Audit Trail Logging
+        client_ip = get_client_ip(request)
+        draft_snapshot = {
+            'id': str(instance.id),
+            'sr_no': instance.sr_no,
+            'title': instance.title,
+            'status': instance.status,
+            'created_by': instance.created_by.username if instance.created_by else None,
+            'area': instance.area,
+            'mini_factory': instance.mini_factory,
+            'suggestion_date': str(instance.suggestion_date) if instance.suggestion_date else None,
+        }
+
+        with transaction.atomic():
+            # Create audit log record before deleting the model instance
+            create_audit_log(
+                user=request.user,
+                action='delete',
+                kaizen=None,
+                previous_value=draft_snapshot,
+                new_value=None,
+                remarks=f"Kaizen draft {instance.sr_no} ('{instance.title}') deleted by {request.user.username} ({user_role}).",
+                ip_address=client_ip,
+            )
+
+            logger.info(
+                f"Kaizen draft deleted: sr_no={instance.sr_no}, id={instance.id}, "
+                f"deleted_by={request.user.username}, ip={client_ip}"
+            )
+
+            # Perform deletion
+            instance.delete()
+
         return Response({
             'success': True,
             'message': 'Kaizen draft deleted successfully.',
         }, status=status.HTTP_200_OK)
+
 
     # -----------------------------------------------------------------------
     # Custom Actions
@@ -439,6 +498,9 @@ class KaizenViewSet(viewsets.ModelViewSet):
         })
 
 
+from core.ratelimit import FileUploadRateThrottle
+
+
 class KaizenEvidenceViewSet(viewsets.ModelViewSet):
     """
     Evidence upload/management for a specific Kaizen.
@@ -448,6 +510,7 @@ class KaizenEvidenceViewSet(viewsets.ModelViewSet):
     """
     serializer_class = KaizenEvidenceSerializer
     permission_classes = [AllowAny]
+    throttle_classes = [FileUploadRateThrottle]
     parser_classes = [MultiPartParser, FormParser]
 
     def get_queryset(self):

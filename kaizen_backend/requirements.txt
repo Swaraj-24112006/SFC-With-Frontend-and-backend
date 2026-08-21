@@ -4,12 +4,17 @@ djangorestframework==3.16.0
 django-cors-headers==4.7.0
 django-filter==25.1
 
-# Authentication
+# Authentication & Security
 djangorestframework-simplejwt==5.5.0
+django-ratelimit==4.1.0
 
 # Redis — Session Store & Cache
 django-redis==5.4.0
 redis==5.2.1
+
+# SMS & Async Tasks
+twilio==9.11.0
+celery==5.6.3
 
 # Database
 psycopg2-binary==2.9.10

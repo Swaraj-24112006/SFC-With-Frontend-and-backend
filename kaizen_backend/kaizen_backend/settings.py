@@ -138,18 +138,50 @@ CACHES = {
 }
 
 # =============================================================================
+# Celery Configuration (Async Task Processing via Redis Broker)
+# =============================================================================
+CELERY_BROKER_URL = config('CELERY_BROKER_URL', default=REDIS_URL)
+CELERY_RESULT_BACKEND = config('CELERY_RESULT_BACKEND', default=REDIS_URL)
+CELERY_ACCEPT_CONTENT = ['json']
+CELERY_TASK_SERIALIZER = 'json'
+CELERY_RESULT_SERIALIZER = 'json'
+CELERY_TIMEZONE = 'Asia/Kolkata'
+CELERY_TASK_TRACK_STARTED = True
+CELERY_TASK_ALWAYS_EAGER = config('CELERY_TASK_ALWAYS_EAGER', default=False, cast=bool)
+
+# =============================================================================
+# Twilio SMS Configuration
+# =============================================================================
+TWILIO_ACCOUNT_SID = config('TWILIO_ACCOUNT_SID', default='AC242546d3853dbddcbcd33268966c7d5a')
+TWILIO_AUTH_TOKEN = config('TWILIO_AUTH_TOKEN', default='44bbf206f84b0caa8781c2d5e6fbca45')
+TWILIO_PHONE_NUMBER = config('TWILIO_PHONE_NUMBER', default='+19518779367')
+TWILIO_SENDER_NAME = config('TWILIO_SENDER_NAME', default='KSPG Kaizen')
+
+# =============================================================================
 # Session Security — Redis-backed with HttpOnly / SameSite cookies
 # =============================================================================
-SESSION_COOKIE_AGE = config('SESSION_COOKIE_AGE', default=3600, cast=int)  # 60 min
+SESSION_COOKIE_AGE = config('SESSION_COOKIE_AGE', default=3600, cast=int)  # 60 min sliding base
 MAX_CONCURRENT_SESSIONS = config('MAX_CONCURRENT_SESSIONS', default=5, cast=int)
+
+# Session Hijacking & Timeout Controls
+SESSION_IDLE_TIMEOUT_SECONDS = config('SESSION_IDLE_TIMEOUT_SECONDS', default=1800, cast=int)      # 30 min idle timeout
+SESSION_ABSOLUTE_TIMEOUT_SECONDS = config('SESSION_ABSOLUTE_TIMEOUT_SECONDS', default=43200, cast=int)  # 12 hr absolute timeout
+SESSION_STRICT_DEVICE_CHECK = config('SESSION_STRICT_DEVICE_CHECK', default=True, cast=bool)       # User-Agent anomaly check
+SESSION_STRICT_IP_CHECK = config('SESSION_STRICT_IP_CHECK', default=False, cast=bool)             # Strict IP binding
 
 # Cookie security flags
 SESSION_COOKIE_NAME = 'kspg_session'
 SESSION_COOKIE_HTTPONLY = True           # Not accessible via JavaScript
 SESSION_COOKIE_SAMESITE = 'Lax'         # Prevents CSRF while allowing normal navigation
-SESSION_COOKIE_SECURE = not DEBUG        # True in production (HTTPS), False in dev (HTTP)
+SESSION_COOKIE_SECURE = config('SESSION_COOKIE_SECURE', default=not DEBUG, cast=bool)
 SESSION_COOKIE_PATH = '/'
 SESSION_SAVE_EVERY_REQUEST = False       # We manage TTL manually in middleware
+
+# Global Security Headers
+SECURE_CONTENT_TYPE_NOSNIFF = True
+X_FRAME_OPTIONS = 'DENY'
+SECURE_REFERRER_POLICY = 'strict-origin-when-cross-origin'
+SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
 
 # KSPG custom session cookie name (used by SessionValidationMiddleware)
 KSPG_SESSION_COOKIE_NAME = 'kspg_sid'
@@ -167,6 +199,14 @@ AUTH_PASSWORD_VALIDATORS = [
 ]
 
 # =============================================================================
+# =============================================================================
+# Rate Limiting Configuration (django-ratelimit & Redis cache)
+# =============================================================================
+RATELIMIT_USE_CACHE = 'default'
+RATELIMIT_ENABLE = True
+RATELIMIT_VIEW = 'core.ratelimit.ratelimited_handler'
+
+# =============================================================================
 # REST Framework
 # =============================================================================
 REST_FRAMEWORK = {
@@ -179,10 +219,18 @@ REST_FRAMEWORK = {
     ),
     'DEFAULT_PAGINATION_CLASS': 'rest_framework.pagination.PageNumberPagination',
     'PAGE_SIZE': 50,
-    'DEFAULT_THROTTLE_CLASSES': [],
+    'DEFAULT_THROTTLE_CLASSES': [
+        'core.ratelimit.NormalAPIRateThrottle',
+    ],
     'DEFAULT_THROTTLE_RATES': {
-        'anon': '1000/day',
-        'user': '10000/day',
+        'anon': '60/min',
+        'user': '100/min',
+        'login_ip': '5/min',
+        'login_user': '5/min',
+        'password_reset': '3/min',
+        'otp_verify': '5/min',
+        'file_upload': '10/min',
+        'admin_api': '30/min',
     },
     'EXCEPTION_HANDLER': 'core.exceptions.custom_exception_handler',
     'DEFAULT_RENDERER_CLASSES': (

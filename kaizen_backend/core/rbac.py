@@ -149,6 +149,7 @@ class IsOwnerOrCommitteeOrAbove(BasePermission):
 # ─── Granular permission strings (for Role.permissions JSONField) ─────────────
 
 PERM_KAIZEN_CREATE          = 'kaizen.create'
+PERM_KAIZEN_DELETE_DRAFT    = 'kaizen.delete_draft'
 PERM_KAIZEN_VIEW_ALL        = 'kaizen.view_all'
 PERM_KAIZEN_COMMITTEE_UPDATE = 'kaizen.committee_update'
 PERM_KAIZEN_IMPACT_CLOSURE  = 'kaizen.impact_closure'
@@ -165,12 +166,14 @@ PERM_PPSR_ALL               = 'ppsr.all'
 
 ROLE_PERMISSIONS: dict[str, dict[str, bool]] = {
     ROLE_INITIATOR: {
-        PERM_KAIZEN_CREATE:   True,
-        PERM_KAIZEN_AWARDS:   True,
-        PERM_KAIZEN_FLOWCHART: True,
+        PERM_KAIZEN_CREATE:       True,
+        PERM_KAIZEN_DELETE_DRAFT: True,
+        PERM_KAIZEN_AWARDS:       True,
+        PERM_KAIZEN_FLOWCHART:    True,
         # everything else is False
     },
     ROLE_COMMITTEE: {
+        PERM_KAIZEN_DELETE_DRAFT: False,
         PERM_KAIZEN_COMMITTEE_UPDATE: True,
         PERM_KAIZEN_IMPACT_CLOSURE:   True,
         PERM_KAIZEN_REGISTER:         True,
@@ -179,6 +182,7 @@ ROLE_PERMISSIONS: dict[str, dict[str, bool]] = {
     },
     ROLE_COORDINATOR: {
         PERM_KAIZEN_CREATE:           True,
+        PERM_KAIZEN_DELETE_DRAFT:     True,
         PERM_KAIZEN_VIEW_ALL:         True,
         PERM_KAIZEN_COMMITTEE_UPDATE: True,
         PERM_KAIZEN_IMPACT_CLOSURE:   True,
@@ -194,3 +198,4 @@ ROLE_PERMISSIONS: dict[str, dict[str, bool]] = {
         # Admin has all permissions — checked via is_superuser/is_staff shortcut
     },
 }
+

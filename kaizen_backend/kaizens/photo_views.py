@@ -31,6 +31,7 @@ from rest_framework.parsers import MultiPartParser, FormParser
 from rest_framework import status as drf_status
 
 from kaizens.models import Kaizen
+from core.ratelimit import FileUploadRateThrottle
 
 logger = logging.getLogger(__name__)
 
@@ -55,8 +56,10 @@ class KaizenPhotoUploadView(APIView):
     """
     POST /api/v1/kaizens/<pk>/upload-photo/
     Upload a before or after photo. Saved to local MEDIA_ROOT.
+    Rate limited to 10 requests/minute/user.
     """
     permission_classes = [AllowAny]
+    throttle_classes = [FileUploadRateThrottle]
     parser_classes = [MultiPartParser, FormParser]
 
     def post(self, request, pk):

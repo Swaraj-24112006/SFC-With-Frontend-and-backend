@@ -11,6 +11,11 @@ from .views import (
     RegisterView,
     LogoutView,
     PasswordChangeView,
+    ForgotPasswordRequestView,
+    VerifyOTPView,
+    ResetPasswordView,
+    PasswordResetRequestView,
+    OTPVerifyView,
     ProfileView,
     UserViewSet,
     RoleViewSet,
@@ -25,6 +30,15 @@ urlpatterns = [
     path('login/', LoginView.as_view(), name='login'),
     path('register/', RegisterView.as_view(), name='register'),
     path('logout/', LogoutView.as_view(), name='logout'),
+
+    # Password reset via SMS OTP (Standard Checklist Endpoints)
+    path('forgot-password/', ForgotPasswordRequestView.as_view(), name='forgot-password'),
+    path('verify-otp/', VerifyOTPView.as_view(), name='verify-otp'),
+    path('reset-password/', ResetPasswordView.as_view(), name='reset-password'),
+
+    # Backward compatibility aliases
+    path('password/reset/', ForgotPasswordRequestView.as_view(), name='password-reset'),
+    path('otp/verify/', VerifyOTPView.as_view(), name='otp-verify'),
 
     # Token refresh (uses cookie refresh token if needed)
     path('token/refresh/', TokenRefreshView.as_view(), name='token-refresh'),

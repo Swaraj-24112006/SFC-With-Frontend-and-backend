@@ -5,6 +5,7 @@ import {
   sanitiseUsername,
   AuthUser,
 } from '../utils/auth';
+import ForgotPasswordModal from './ForgotPasswordModal';
 
 // ─── Types ─────────────────────────────────────────────────────────────────────
 
@@ -23,6 +24,7 @@ export default function LoginPage({ onLoginSuccess }: LoginPageProps) {
   const [loginState, setLoginState] = useState<LoginState>('idle');
   const [errorMessage, setErrorMessage] = useState('');
   const [focusedField, setFocusedField] = useState<'username' | 'password' | null>(null);
+  const [isForgotModalOpen, setIsForgotModalOpen] = useState(false);
 
   // Reset error when user starts typing again
   useEffect(() => {
@@ -673,6 +675,48 @@ export default function LoginPage({ onLoginSuccess }: LoginPageProps) {
               </div>
             </div>
 
+            {/* Forgot Passcode Link */}
+            <div
+              style={{
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'center',
+                marginBottom: 24,
+                marginTop: -16,
+              }}
+            >
+              <span
+                style={{
+                  fontSize: 11,
+                  color: 'rgba(197,197,212,0.5)',
+                  fontFamily: "'JetBrains Mono', monospace",
+                }}
+              >
+                SMS OTP Verified
+              </span>
+              <button
+                type="button"
+                id="forgotPasscodeBtn"
+                onClick={() => setIsForgotModalOpen(true)}
+                disabled={isDisabled}
+                style={{
+                  background: 'none',
+                  border: 'none',
+                  color: '#8898ee',
+                  fontSize: 12,
+                  fontFamily: "'JetBrains Mono', monospace",
+                  fontWeight: 600,
+                  cursor: isDisabled ? 'not-allowed' : 'pointer',
+                  padding: 0,
+                  transition: 'color 0.2s',
+                  textDecoration: 'underline',
+                  textUnderlineOffset: 3,
+                }}
+              >
+                Forgot Passcode?
+              </button>
+            </div>
+
             {/* Submit Button */}
             <button
               id="submitBtn"
@@ -814,6 +858,20 @@ export default function LoginPage({ onLoginSuccess }: LoginPageProps) {
           cursor: not-allowed;
         }
       `}</style>
+
+      {/* ── Forgot Passcode Modal ────────────────────────────────────────── */}
+      <ForgotPasswordModal
+        isOpen={isForgotModalOpen}
+        onClose={() => setIsForgotModalOpen(false)}
+        initialIdentifier={username}
+        onSuccessReturn={recoveredUsername => {
+          if (recoveredUsername) {
+            setUsername(recoveredUsername);
+          }
+          setPassword('');
+          setErrorMessage('');
+        }}
+      />
     </div>
   );
 }

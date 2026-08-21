@@ -89,6 +89,14 @@ def _get_ttl() -> int:
     return getattr(settings, "SESSION_COOKIE_AGE", 3600)
 
 
+def _get_idle_timeout() -> int:
+    return getattr(settings, "SESSION_IDLE_TIMEOUT_SECONDS", 1800)  # 30 min
+
+
+def _get_absolute_timeout() -> int:
+    return getattr(settings, "SESSION_ABSOLUTE_TIMEOUT_SECONDS", 43200)  # 12 hours
+
+
 def _get_max_sessions() -> int:
     return getattr(settings, "MAX_CONCURRENT_SESSIONS", 5)
 
@@ -104,11 +112,13 @@ def create_session(
     user_id: int,
     username: str,
     user_agent: str = "",
+    ip_address: str = "",
     jti: str = "",
+    is_mfa_verified: bool = False,
 ) -> str:
     """
     Create a new Redis session record and return the session_id.
-
+    Stores device fingerprinting (IP, User-Agent), timestamps, and MFA status.
     Also manages the per-user session index: if the user already has
     MAX_CONCURRENT_SESSIONS, the oldest one is evicted first.
     """
@@ -121,8 +131,10 @@ def create_session(
     payload = {
         "user_id": user_id,
         "username": username,
+        "ip_address": ip_address,
+        "user_agent": user_agent[:512],
         "jti": jti,
-        "user_agent": user_agent[:512],          # cap length
+        "is_mfa_verified": is_mfa_verified,
         "created_at": now,
         "last_seen": now,
     }
@@ -135,14 +147,19 @@ def create_session(
     # Add to user's session index (left-push = newest first)
     user_key = _user_sessions_key(user_id)
     pipe.lpush(user_key, session_id)
-    pipe.expire(user_key, ttl * max_sessions)        # generous TTL on index
+    pipe.expire(user_key, ttl * max_sessions)
 
     pipe.execute()
 
     # Evict overflow (keep only the newest MAX_CONCURRENT_SESSIONS)
     _evict_overflow_sessions(r, user_id, max_sessions)
 
-    logger.info("Session created: user=%s session=%s…", username, session_id[:8])
+    logger.info(
+        "Session created: user=%s session=%s… ip=%s",
+        username,
+        session_id[:8],
+        ip_address or "unknown",
+    )
     return session_id
 
 
@@ -161,16 +178,93 @@ def get_session(session_id: str) -> dict | None:
         return None
 
 
-def refresh_session_ttl(session_id: str) -> None:
-    """Slide the session TTL (call on every authenticated request)."""
+def validate_session_timeouts(session_data: dict) -> tuple[bool, str]:
+    """
+    Validates idle timeout (default 30m) and absolute timeout (default 12h).
+    Returns (True, "") if valid, or (False, "REASON") if expired.
+    """
+    if not session_data:
+        return False, "SESSION_MISSING"
+
+    now = datetime.now(timezone.utc)
+
+    # 1. Check Idle Timeout
+    last_seen_str = session_data.get("last_seen")
+    if last_seen_str:
+        try:
+            last_seen = datetime.fromisoformat(last_seen_str)
+            idle_seconds = (now - last_seen).total_seconds()
+            if idle_seconds > _get_idle_timeout():
+                return False, "SESSION_IDLE_TIMEOUT"
+        except Exception:
+            pass
+
+    # 2. Check Absolute Timeout
+    created_at_str = session_data.get("created_at")
+    if created_at_str:
+        try:
+            created_at = datetime.fromisoformat(created_at_str)
+            absolute_seconds = (now - created_at).total_seconds()
+            if absolute_seconds > _get_absolute_timeout():
+                return False, "SESSION_ABSOLUTE_TIMEOUT"
+        except Exception:
+            pass
+
+    return True, ""
+
+
+def rotate_session(
+    old_session_id: str,
+    ip_address: str = "",
+    user_agent: str = "",
+) -> str:
+    """
+    Rotate session ID after privilege change or sensitive action.
+    Transfers session metadata to a new ID and deletes the old one.
+    """
+    r = get_redis()
+    session_data = get_session(old_session_id)
+    if not session_data:
+        return generate_session_id()
+
+    new_session_id = generate_session_id()
+    now = datetime.now(timezone.utc).isoformat()
+    ttl = _get_ttl()
+    user_id = session_data.get("user_id")
+
+    session_data["last_seen"] = now
+    if ip_address:
+        session_data["ip_address"] = ip_address
+    if user_agent:
+        session_data["user_agent"] = user_agent[:512]
+
+    pipe = r.pipeline(transaction=True)
+    pipe.setex(_session_key(new_session_id), ttl, json.dumps(session_data))
+    pipe.delete(_session_key(old_session_id))
+
+    if user_id:
+        user_key = _user_sessions_key(user_id)
+        pipe.lrem(user_key, 0, old_session_id)
+        pipe.lpush(user_key, new_session_id)
+
+    pipe.execute()
+    logger.info("Session rotated: %s… -> %s…", old_session_id[:8], new_session_id[:8])
+    return new_session_id
+
+
+def refresh_session_ttl(session_id: str, ip_address: str = "", user_agent: str = "") -> None:
+    """Slide the session TTL and update last_seen timestamp."""
     try:
         r = get_redis()
         ttl = _get_ttl()
-        # Also update last_seen inside the payload
         raw = r.get(_session_key(session_id))
         if raw:
             payload = json.loads(raw)
             payload["last_seen"] = datetime.now(timezone.utc).isoformat()
+            if ip_address and not payload.get("ip_address"):
+                payload["ip_address"] = ip_address
+            if user_agent and not payload.get("user_agent"):
+                payload["user_agent"] = user_agent[:512]
             r.setex(_session_key(session_id), ttl, json.dumps(payload))
     except Exception as exc:
         logger.warning("Redis refresh_session_ttl error: %s", exc)

@@ -17,6 +17,7 @@ from rest_framework.exceptions import (
     Throttled,
 )
 import logging
+from django.conf import settings
 
 logger = logging.getLogger('kaizen')
 
@@ -93,6 +94,24 @@ def custom_exception_handler(exc, context):
     if isinstance(exc, DjangoValidationError):
         exc = ValidationError(detail=exc.message_dict if hasattr(exc, 'message_dict') else exc.messages)
 
+    # Handle django-ratelimit Ratelimited exception
+    try:
+        from django_ratelimit.exceptions import Ratelimited
+        if isinstance(exc, Ratelimited):
+            logger.warning("django-ratelimit triggered: HTTP 429 Too Many Requests")
+            response = Response({
+                'success': False,
+                'error': {
+                    'code': 'RATE_LIMIT_EXCEEDED',
+                    'message': 'Too many requests. Rate limit exceeded. Please try again later.',
+                    'details': {'retry_after': 60},
+                }
+            }, status=status.HTTP_429_TOO_MANY_REQUESTS)
+            response['Retry-After'] = '60'
+            return response
+    except ImportError:
+        pass
+
     # Call DRF's default handler first
     response = exception_handler(exc, context)
 
@@ -117,8 +136,20 @@ def custom_exception_handler(exc, context):
             error_code = 'METHOD_NOT_ALLOWED'
             message = f'HTTP method not allowed.'
         elif isinstance(exc, Throttled):
-            error_code = 'RATE_LIMITED'
-            message = f'Request rate limit exceeded. Retry after {exc.wait} seconds.'
+            error_code = 'RATE_LIMIT_EXCEEDED'
+            wait_seconds = int(exc.wait) if exc.wait is not None else 60
+            message = f'Request rate limit exceeded. Retry after {wait_seconds} seconds.'
+            response.status_code = status.HTTP_429_TOO_MANY_REQUESTS
+            response.data = {
+                'success': False,
+                'error': {
+                    'code': error_code,
+                    'message': message,
+                    'details': {'retry_after': wait_seconds},
+                }
+            }
+            response['Retry-After'] = str(wait_seconds)
+            return response
 
         response.data = {
             'success': False,
@@ -138,6 +169,6 @@ def custom_exception_handler(exc, context):
         'error': {
             'code': 'INTERNAL_SERVER_ERROR',
             'message': 'An unexpected error occurred. Please try again later.',
-            'details': {'exception': str(exc)} if True else {},  # Only in DEBUG
+            'details': {'exception': str(exc)} if settings.DEBUG else {},
         }
     }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)

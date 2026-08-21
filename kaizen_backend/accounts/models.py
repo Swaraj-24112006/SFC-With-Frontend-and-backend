@@ -116,3 +116,85 @@ class CustomUser(AbstractUser):
         if category == ROLE_ADMIN or self.is_superuser or self.is_staff:
             return True
         return ROLE_PERMISSIONS.get(category, {}).get(permission, False)
+
+
+class PasswordResetOTP(models.Model):
+    """
+    Stores cryptographically hashed One-Time Passwords (OTPs) for password resets.
+    Follows zero-plaintext security principles:
+    - OTP is stored as a salted cryptographic hash (make_password).
+    - 5-minute strict expiration.
+    - Locked after 5 failed verification attempts.
+    - Single-use flag.
+    - Issue of single-use reset token upon successful verification.
+    """
+    user = models.ForeignKey(
+        CustomUser,
+        on_delete=models.CASCADE,
+        related_name='password_reset_otps'
+    )
+    otp_hash = models.CharField(
+        max_length=255,
+        help_text='Salted hash of 6-digit OTP code'
+    )
+    reset_token_hash = models.CharField(
+        max_length=255,
+        blank=True,
+        null=True,
+        help_text='Salted hash of reset token issued after OTP verification'
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    expires_at = models.DateTimeField()
+    is_used = models.BooleanField(default=False)
+    attempt_count = models.PositiveIntegerField(default=0)
+    ip_address = models.GenericIPAddressField(null=True, blank=True)
+    user_agent = models.TextField(blank=True)
+
+    class Meta:
+        db_table = 'password_reset_otps'
+        ordering = ['-created_at']
+        indexes = [
+            models.Index(fields=['user', '-created_at']),
+            models.Index(fields=['expires_at']),
+        ]
+
+    def __str__(self):
+        return f"PasswordResetOTP(user={self.user.username}, valid={self.is_valid})"
+
+    @property
+    def is_expired(self) -> bool:
+        from django.utils import timezone
+        return timezone.now() > self.expires_at
+
+    @property
+    def is_locked(self) -> bool:
+        return self.attempt_count >= 5
+
+    @property
+    def is_valid(self) -> bool:
+        return (not self.is_used) and (not self.is_locked) and (not self.is_expired)
+
+    @staticmethod
+    def mask_phone_number(phone: str) -> str:
+        """
+        Mask phone number for safe display (e.g., +91 9876543210 -> +91 XXXXX 3210).
+        Preserves country code / leading format and last 4 digits.
+        """
+        if not phone:
+            return ""
+        clean = phone.strip()
+        if len(clean) <= 4:
+            return "••••"
+        prefix = ""
+        digits = clean
+        if clean.startswith('+'):
+            parts = clean.split(' ', 1) if ' ' in clean else (clean[:3], clean[3:])
+            prefix = parts[0] + " "
+            digits = parts[1]
+        
+        digits_only = "".join(c for c in digits if c.isdigit())
+        if len(digits_only) <= 4:
+            return f"{prefix}••••"
+        masked_middle = "X" * (len(digits_only) - 4)
+        last_four = digits_only[-4:]
+        return f"{prefix}{masked_middle} {last_four}".strip()
